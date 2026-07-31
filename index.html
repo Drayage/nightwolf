@@ -116,14 +116,16 @@
   </dialog>
 
   <script type="module">
-    import { APP_VERSION } from "./js/app-config.js?v=20260731-8";
-    import { mountVersionBadge, mountErrorOverlay } from "./js/devtools.js?v=20260731-8";
-    import { initAudio } from "./js/audio.js?v=20260731-8";
-    import "./js/ui.js?v=20260731-8";
+    import { APP_VERSION } from "./js/app-config.js?v=20260731-9";
+    import { mountVersionBadge, mountErrorOverlay } from "./js/devtools.js?v=20260731-9";
+    import { initAudio, startBgm } from "./js/audio.js?v=20260731-9";
+    import { RITUAL } from "./js/palettes.js?v=20260731-9";
+    import "./js/ui.js?v=20260731-9";
 
     mountErrorOverlay(); // 가장 먼저 — 초기화 에러도 잡히게
     mountVersionBadge();
     initAudio();
+    startBgm(RITUAL); // 자동재생 정책 때문에 실제로는 첫 제스처(initAudio의 unlock) 이후 들림
 
     const rulesBtn = document.createElement("button");
     rulesBtn.id = "rules-btn";

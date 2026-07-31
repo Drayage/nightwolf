@@ -36,6 +36,10 @@
     dialog { border: 0; border-radius: 14px; max-width: 420px; padding: 18px; background: #1c1a22; color: #eee; }
     dialog::backdrop { background: rgba(0, 0, 0, 0.6); }
 
+    .settings-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .toggle-button { padding: 6px 16px; border: 1px solid #3a3542; border-radius: 20px; background: #26222c; color: #8b8b9a; font-size: 13px; min-width: 56px; }
+    .toggle-button.on { background: #3a4256; border-color: #5a6480; color: #fff; }
+
     .screen { max-width: 720px; margin: 0 auto; padding: 24px 16px 32px; display: flex; flex-direction: column; gap: 12px; }
     .title-screen, .end-screen { text-align: center; align-items: center; }
     .title-screen h1, .end-screen h1 { color: #c62828; letter-spacing: 0.05em; margin: 8px 0 16px; }
@@ -115,17 +119,59 @@
     <button onclick="this.closest('dialog').close()">닫기</button>
   </dialog>
 
+  <!-- 설정 모달: 배경음/효과음 on-off. 값은 js/audio.js가 localStorage에 저장. -->
+  <dialog id="settings-modal">
+    <h2 style="margin-top:0">설정</h2>
+    <p class="settings-row">
+      <span>배경음악</span>
+      <button id="bgm-toggle" class="toggle-button"></button>
+    </p>
+    <p class="settings-row">
+      <span>효과음</span>
+      <button id="sfx-toggle" class="toggle-button"></button>
+    </p>
+    <button onclick="this.closest('dialog').close()">닫기</button>
+  </dialog>
+
   <script type="module">
-    import { APP_VERSION } from "./js/app-config.js?v=20260731-9";
-    import { mountVersionBadge, mountErrorOverlay } from "./js/devtools.js?v=20260731-9";
-    import { initAudio, startBgm } from "./js/audio.js?v=20260731-9";
-    import { RITUAL } from "./js/palettes.js?v=20260731-9";
-    import "./js/ui.js?v=20260731-9";
+    import { APP_VERSION } from "./js/app-config.js?v=20260731-10";
+    import { mountVersionBadge, mountErrorOverlay } from "./js/devtools.js?v=20260731-10";
+    import { initAudio, startBgm, stopBgm, setEnabled, isEnabled } from "./js/audio.js?v=20260731-10";
+    import { RITUAL } from "./js/palettes.js?v=20260731-10";
+    import "./js/ui.js?v=20260731-10";
 
     mountErrorOverlay(); // 가장 먼저 — 초기화 에러도 잡히게
     mountVersionBadge();
     initAudio();
-    startBgm(RITUAL); // 자동재생 정책 때문에 실제로는 첫 제스처(initAudio의 unlock) 이후 들림
+    if (isEnabled("bgm")) startBgm(RITUAL); // 자동재생 정책 때문에 실제로는 첫 제스처(initAudio의 unlock) 이후 들림
+
+    const settingsBtn = document.createElement("button");
+    settingsBtn.id = "settings-btn";
+    settingsBtn.textContent = "설정";
+    settingsBtn.style.cssText = "position:fixed;right:6px;bottom:34px;z-index:9998;font-size:11px;padding:6px 10px;border:0;border-radius:8px;background:#0006;color:#fff;";
+    settingsBtn.onclick = () => document.getElementById("settings-modal").showModal();
+    document.body.appendChild(settingsBtn);
+
+    const bgmToggle = document.getElementById("bgm-toggle");
+    const sfxToggle = document.getElementById("sfx-toggle");
+    const renderToggle = (btn, on) => {
+      btn.textContent = on ? "켜짐" : "꺼짐";
+      btn.classList.toggle("on", on);
+    };
+    renderToggle(bgmToggle, isEnabled("bgm"));
+    renderToggle(sfxToggle, isEnabled("sfx"));
+    bgmToggle.onclick = () => {
+      const next = !isEnabled("bgm");
+      setEnabled("bgm", next);
+      renderToggle(bgmToggle, next);
+      if (next) startBgm(RITUAL);
+      else stopBgm();
+    };
+    sfxToggle.onclick = () => {
+      const next = !isEnabled("sfx");
+      setEnabled("sfx", next);
+      renderToggle(sfxToggle, next);
+    };
 
     const rulesBtn = document.createElement("button");
     rulesBtn.id = "rules-btn";

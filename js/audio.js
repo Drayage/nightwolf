@@ -16,9 +16,7 @@ function ensureCtx() {
     bgmBus.connect(master);
     sfxBus.connect(master);
     master.connect(ctx.destination);
-    const vol = loadVolumes();
-    bgmBus.gain.value = vol.bgm;
-    sfxBus.gain.value = vol.sfx;
+    applyBusGains();
   }
   if (ctx.state === "suspended") ctx.resume();
   return ctx;
@@ -31,19 +29,40 @@ export function initAudio() {
   document.addEventListener("keydown", unlock, { once: true });
 }
 
+// on/off는 볼륨 값과 별개로 저장한다 — 꺼도 이전 볼륨을 잊지 않고, 다시 켜면
+// 그 볼륨으로 바로 돌아온다(bgmOn/sfxOn 기본값은 켜짐).
 function loadVolumes() {
   try {
-    return { bgm: 0.5, sfx: 0.8, ...JSON.parse(localStorage.getItem(VOLKEY) || "{}") };
+    return { bgm: 0.5, sfx: 0.8, bgmOn: true, sfxOn: true, ...JSON.parse(localStorage.getItem(VOLKEY) || "{}") };
   } catch (e) {
-    return { bgm: 0.5, sfx: 0.8 };
+    return { bgm: 0.5, sfx: 0.8, bgmOn: true, sfxOn: true };
   }
+}
+function saveVolumes(vol) {
+  localStorage.setItem(VOLKEY, JSON.stringify(vol));
+}
+function applyBusGains() {
+  if (!bgmBus || !sfxBus) return;
+  const vol = loadVolumes();
+  bgmBus.gain.value = vol.bgmOn ? vol.bgm : 0;
+  sfxBus.gain.value = vol.sfxOn ? vol.sfx : 0;
 }
 export function setVolume(kind, v) {
   ensureCtx();
-  (kind === "bgm" ? bgmBus : sfxBus).gain.value = v;
   const vol = loadVolumes();
   vol[kind] = v;
-  localStorage.setItem(VOLKEY, JSON.stringify(vol));
+  saveVolumes(vol);
+  applyBusGains();
+}
+export function setEnabled(kind, on) {
+  ensureCtx();
+  const vol = loadVolumes();
+  vol[kind + "On"] = on;
+  saveVolumes(vol);
+  applyBusGains();
+}
+export function isEnabled(kind) {
+  return loadVolumes()[kind + "On"] !== false;
 }
 export const getVolumes = loadVolumes;
 

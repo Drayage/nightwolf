@@ -25,11 +25,11 @@ export const RELIC_INFO = {
   },
   robber: {
     name: "도둑의 유물",
-    description: "밤마다 다른 사람과 눈이 마주치면 그 유물의 기운을 슬쩍 엿볼 수 있다.",
+    description: "첫날 밤, 다른 사람 하나와 유물을 통째로 맞바꾼다. 그날부터 그 사람의 역할로 살아간다.",
   },
   troublemaker: {
     name: "혼돈의 유물",
-    description: "밤마다 다른 사람 하나의 입을 막는다. 그 사람은 그날 낮 동안 아무 증언도 하지 못한다.",
+    description: "첫날 밤, 자신을 뺀 다른 두 사람의 유물을 몰래 맞바꿔놓는다. 정작 자신의 유물은 그대로다.",
   },
   drunk: {
     name: "몽롱한 유물",
@@ -104,14 +104,11 @@ export const CLAIM_LINES = {
     `나는 예지의 유물입니다. 어젯밤 ${ctx.targetName}의 유물을 몰래 봤는데, ${
       ctx.strange ? "뭔가... 이상했어요." : "평범해 보였어요."
     }`,
-  robber: (ctx) =>
-    `나는 도둑의 유물입니다. 어젯밤 ${ctx.targetName}${and(ctx.targetName)} 눈이 마주쳤는데, ${
-      ctx.strange ? "손끝이 서늘할 만큼 이상했어요." : "그냥 평범한 기운이었어요."
-    }`,
+  robber: () => "나는 도둑의 유물입니다. 첫날 밤 누군가와 유물이 통째로 뒤바뀐 걸 알아챘어요.",
   troublemaker: (ctx) =>
-    ctx.targetName
-      ? `나는 혼돈의 유물입니다. 오늘 ${ctx.targetName}의 입을 막아놨어요.`
-      : "나는 혼돈의 유물입니다. 오늘은 딱히 손쓸 대상이 없었어요.",
+    ctx.targetName && ctx.targetName2
+      ? `나는 혼돈의 유물입니다. 첫날 밤 ${ctx.targetName}${and(ctx.targetName)} ${ctx.targetName2}의 유물을 몰래 바꿔놨어요.`
+      : "나는 혼돈의 유물입니다. 첫날 밤 누군가의 유물을 몰래 바꿔놨는데, 상대가 잘 기억나지 않아요.",
   drunk: () => "나는 몽롱한 유물입니다. 사실 어젯밤 일이 하나도 기억나지 않아요.",
   hunter: () => "나는 사냥꾼의 유물입니다. 저를 억울하게 건드리면 가만있지 않을 겁니다.",
   tanner: () => "나는 무두장이의 유물입니다. 솔직히... 차라리 제가 처형됐으면 좋겠어요.",

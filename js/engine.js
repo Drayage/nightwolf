@@ -36,6 +36,30 @@ function drawNames(rng, count) {
   return result;
 }
 
+// 도둑: 첫날 밤 자신을 뺀 무작위 한 명과 유물을 통째로 교환한다 — 그날부터 훔친
+// 유물의 역할로 살아간다(원작 그대로). 이 함수는 villagers 배열을 제자리에서 바꾼다.
+function applyRobberSwap(rng, villagers) {
+  const robber = villagers.find((v) => v.relic === "robber");
+  if (!robber) return;
+  const others = villagers.filter((v) => v.id !== robber.id);
+  if (others.length === 0) return;
+  const target = pick(rng, others);
+  [robber.relic, target.relic] = [target.relic, robber.relic];
+}
+
+// 문제아: 첫날 밤 자신을 뺀 다른 두 사람의 유물을 서로 바꿔놓는다. 자신의 유물은
+// 그대로 유지 — 그래서 누구를 바꿨는지 기억하고 매일 그대로 증언할 수 있다.
+// (원작 순서상 도둑보다 나중에 깨어나므로, 도둑이 이미 바꿔놓은 이후 상태를 본다.)
+function applyTroublemakerSwap(rng, villagers) {
+  const troublemaker = villagers.find((v) => v.relic === "troublemaker");
+  if (!troublemaker) return;
+  const others = villagers.filter((v) => v.id !== troublemaker.id);
+  if (others.length < 2) return;
+  const [a, b] = shuffle(rng, others);
+  [a.relic, b.relic] = [b.relic, a.relic];
+  troublemaker.swappedNames = [a.name, b.name];
+}
+
 export function createVillage(rng) {
   const relics = shuffle(rng, DEFAULT_RELIC_LAYOUT);
   const names = drawNames(rng, relics.length);
@@ -47,15 +71,30 @@ export function createVillage(rng) {
     jailed: false,
   }));
 
+  // 첫날 밤의 일회성 교환(도둑→문제아 순, 원작 기상 순서)을 먼저 확정한다 —
+  // 이후 누가 제물/하수인/결계 등을 쥐고 있는지는 전부 이 결과를 기준으로 정해진다.
+  applyRobberSwap(rng, villagers);
+  applyTroublemakerSwap(rng, villagers);
+
   // 제물/하수인은 정체를 감추려고 실제로 마을에 존재하는 "진짜" 유물 중 하나를 사칭한다.
-  // 사칭 대상은 마을 생성 시 한 번만 정해지고(그날그날 안 바뀜) — 거짓말도 일관성이 있어야
-  // 추궁(모순 찾기)이 성립한다.
+  // 사칭 대상과 그 근거(결계 짝 이름, 문제아가 바꾼 두 사람 등)는 마을 생성 시 한 번만
+  // 정해지고 그날그날 안 바뀐다 — 거짓말도 일관성이 있어야 추궁(모순 찾기)이 성립한다.
   const honestPresent = [...new Set(villagers.map((v) => v.relic))].filter((r) => HONEST_RELICS.includes(r));
   const pool = honestPresent.length > 0 ? honestPresent : ["villager"];
 
-  return villagers.map((v) =>
-    v.relic === "sacrifice" || v.relic === "minion" ? { ...v, claimRole: pick(rng, pool) } : v
-  );
+  for (const v of villagers) {
+    if (v.relic !== "sacrifice" && v.relic !== "minion") continue;
+    v.claimRole = pick(rng, pool);
+    const others = villagers.filter((o) => o.id !== v.id);
+    if (v.claimRole === "mason" && others.length > 0) {
+      v.fakeCtx = { partnerName: pick(rng, others).name };
+    } else if (v.claimRole === "troublemaker" && others.length >= 2) {
+      const [a, b] = shuffle(rng, others);
+      v.fakeCtx = { targetName: a.name, targetName2: b.name };
+    }
+  }
+
+  return villagers;
 }
 
 // 취객은 자기 유물을 스스로도 착각한다 — 매일 밤 다른 "진짜" 유물을 무작위로 주장한다
@@ -74,7 +113,7 @@ function isThreat(v) {
 // "정보가 진짜인가"는 화자가 실제로 그 유물을 갖고 있는가(reliable)로 결정한다 — 취객처럼
 // 무해해도 진짜 그 유물이 아니면 근거는 지어낸 것이다. 둘 다 문장 형태는 동일해서, 같은
 // 유물을 주장하는 사람이 정원(ROLE_SLOTS)보다 많으면 그 자체가 추궁 단서가 된다.
-function buildClaim(rng, state, speaker, silencedId) {
+function buildClaim(rng, state, speaker) {
   const role = resolveClaimRole(rng, speaker);
   const reliable = speaker.relic === role;
   const threat = isThreat(speaker);
@@ -83,7 +122,7 @@ function buildClaim(rng, state, speaker, silencedId) {
   const ctx = {};
   let targetId;
 
-  if (role === "seer" || role === "robber") {
+  if (role === "seer") {
     if (others.length === 0) return null;
     const target = pick(rng, others);
     targetId = target.id;
@@ -93,18 +132,15 @@ function buildClaim(rng, state, speaker, silencedId) {
     ctx.strange = reliable ? trueStrange : rng() < 0.5; // 진짜가 아니면 근거 없이 지어낸 값
     ctx.targetName = target.name;
   } else if (role === "troublemaker") {
-    if (reliable) {
-      const silenced = state.villagers.find((v) => v.id === silencedId);
-      ctx.targetName = silenced ? silenced.name : null;
-    } else if (others.length > 0) {
-      ctx.targetName = pick(rng, others).name; // 지어낸 이름 — 실제로 막힌 사람과 다를 수 있음
-    }
+    const source = reliable ? { targetName: speaker.swappedNames?.[0], targetName2: speaker.swappedNames?.[1] } : speaker.fakeCtx;
+    ctx.targetName = source?.targetName ?? null;
+    ctx.targetName2 = source?.targetName2 ?? null;
   } else if (role === "mason") {
     if (reliable) {
       const realPartner = state.villagers.find((v) => v.relic === "mason" && v.id !== speaker.id);
       ctx.partnerName = realPartner ? realPartner.name : null;
-    } else if (others.length > 0) {
-      ctx.partnerName = pick(rng, others).name; // 진짜 결계의 유물 소지자와는 다른 이름일 확률이 높음
+    } else {
+      ctx.partnerName = speaker.fakeCtx?.partnerName ?? null;
     }
   }
 
@@ -133,17 +169,8 @@ function runNightPhase(state, rng) {
     text: "붉은달이 떠올랐다. 마을은 다시 한번 의식의 밤을 맞이한다.",
   });
 
-  // 진짜 혼돈의 유물 소지자(갇히지 않은 채 살아있어야 함)가 그날 입을 막을 대상을 고른다.
-  const troublemaker = state.villagers.find((v) => v.relic === "troublemaker" && v.alive && !v.jailed);
-  let silencedId = null;
-  if (troublemaker) {
-    const candidates = state.villagers.filter((v) => v.alive && v.id !== troublemaker.id);
-    if (candidates.length > 0) silencedId = pick(rng, candidates).id;
-  }
-
   for (const speaker of state.villagers.filter((v) => v.alive)) {
-    if (speaker.id === silencedId) continue; // 실제로 입이 막혀 그날은 증언하지 못한다
-    const claim = buildClaim(rng, state, speaker, silencedId);
+    const claim = buildClaim(rng, state, speaker);
     if (claim) log.push(claim);
   }
 

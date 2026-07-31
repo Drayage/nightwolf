@@ -25,7 +25,8 @@ export const RELIC_INFO = {
   },
   robber: {
     name: "도둑의 유물",
-    description: "밤마다 다른 사람 하나와 유물을 통째로 맞바꾼다. 그날그날 훔친 역할로 살아간다.",
+    description:
+      "밤마다 다른 사람 하나와 유물을 통째로 맞바꾼다. 유물은 주머니 속에 있어 자기가 뭘 받았는지는 본인도 모른다 — 다만 누구와 바꿨는지는 안다.",
   },
   troublemaker: {
     name: "혼돈의 유물",
@@ -95,27 +96,31 @@ function hasBatchim(word) {
 export const and = (word) => (hasBatchim(word) ? "과" : "와");
 export const copula = (word) => (hasBatchim(word) ? "이에요" : "예요");
 
-// 낮 증언: "나는 [유물]이다. [구체적 근거]." 형태로 통일해 추궁(대조/모순 찾기)이 가능하게 한다.
-// 도둑/문제아/취객은 이제 밤마다 실제로 유물이 바뀌므로, 그날그날 "현재" 유물을 가진
-// 사람이 그날의 증언을 한다 (전날까지 누가 그 유물이었는지는 중요하지 않다).
-// ctx: { targetName, targetName2, strange, partnerName }
+// 낮 증언: 유물은 주머니 속에 있어 아무도 "지금" 자기가 뭔지 모른다. 다들 어젯밤
+// 자기가 한 행동(혹은 계속 같은 자기 인식)을 말할 뿐이다 — 그래서 말하는 유물과
+// 지금 실제로 들고 있는 유물이 다를 수 있다. 능동적으로 뭔가를 "한" 유물(예지/도둑/
+// 문제아/취객)은 과거형으로, 그냥 "그런 사람"인 유물(평범/결계/광기)은 현재형으로 쓴다.
+// belief: { role, targetName, targetName2, strange, partnerName, swappedWithName }
 export const CLAIM_LINES = {
-  villager: () => "나는 평범한 유물입니다. 특별히 본 것은 없어요.",
-  seer: (ctx) =>
-    `나는 예지의 유물입니다. 어젯밤 ${ctx.targetName}의 유물을 몰래 봤는데, ${
-      ctx.strange ? "뭔가... 이상했어요." : "평범해 보였어요."
+  villager: () => "저는 평범한 유물이에요. 특별히 본 건 없어요.",
+  seer: (belief) =>
+    `어젯밤 예지의 유물을 썼어요. ${belief.targetName}의 유물을 몰래 봤는데, ${
+      belief.strange ? "뭔가... 이상했어요." : "평범해 보였어요."
     }`,
-  robber: () => "나는 도둑의 유물입니다. 그런데 이게 어쩌다 제게 왔는지는 저도 잘 모르겠어요.",
-  troublemaker: (ctx) =>
-    ctx.targetName && ctx.targetName2
-      ? `나는 혼돈의 유물입니다. 어젯밤 ${ctx.targetName}${and(ctx.targetName)} ${ctx.targetName2}의 유물을 몰래 바꿔놨어요.`
-      : "나는 혼돈의 유물입니다. 어젯밤도 누군가의 유물을 몰래 바꿔놨는데, 상대가 잘 기억나지 않아요.",
-  drunk: () => "나는 몽롱한 유물입니다. 사실 지금 제가 뭘 가졌는지도 몰라요.",
-  madness: () => "나는 광기의 유물입니다. 머릿속이 온통 뒤엉켜 있어요. 차라리... 절 데려가 주세요.",
-  mason: (ctx) =>
-    ctx.partnerName
-      ? `나는 결계의 유물입니다. 제 짝은 ${ctx.partnerName}${copula(ctx.partnerName)}.`
-      : "나는 결계의 유물입니다. 짝이 있었을 텐데, 이제 소식을 알 수 없어요.",
+  robber: (belief) =>
+    belief.swappedWithName
+      ? `어젯밤 도둑의 유물을 썼어요. ${belief.swappedWithName}${and(belief.swappedWithName)} 유물을 통째로 바꿨는데, 지금 제가 뭘 가졌는지는 저도 몰라요.`
+      : "어젯밤 도둑의 유물을 썼는데, 상대가 잘 기억나지 않아요. 지금 제가 뭘 가졌는지도 몰라요.",
+  troublemaker: (belief) =>
+    belief.targetName && belief.targetName2
+      ? `어젯밤 혼돈의 유물을 썼어요. ${belief.targetName}${and(belief.targetName)} ${belief.targetName2}의 유물을 몰래 바꿔놨어요.`
+      : "어젯밤 혼돈의 유물을 썼는데, 누구 걸 바꿨는지 잘 기억나지 않아요.",
+  drunk: () => "어젯밤 몽롱한 유물을 썼어요. 유물함이랑 뭔가 바꿨는데, 뭘 가져왔는지 기억이 안 나요.",
+  madness: () => "저는 광기의 유물이에요. 머릿속이 온통 뒤엉켜 있어요. 차라리... 절 데려가 주세요.",
+  mason: (belief) =>
+    belief.partnerName
+      ? `저는 결계의 유물이에요. 제 짝은 ${belief.partnerName}${copula(belief.partnerName)}.`
+      : "저는 결계의 유물이에요. 짝이 있었을 텐데, 이제 소식을 알 수 없어요.",
 };
 
 // 오염된(제물/하수인) 화자가 주장 뒤에 붙이는 짧은 태도 — 공포/과잉 확신을 드러낸다.
@@ -139,3 +144,13 @@ export const MADNESS_EXECUTION_LINE =
   "광기의 유물이 산산이 부서지며 낮은 웃음소리 같은 게 새어 나온다. 의식이 끝난 듯한 이상한 안도감이 마을을 감돈다...";
 
 export const SACRIFICE_PLANTED_LINE = "어둠 속에서 하수인이 또 다른 이에게 제물의 유물을 몰래 심어놓았다...";
+
+// 잘못된 제물을 바쳤을 때: 결과가 바로 뜨지 않고 이 대사들이 순서대로 흐른 뒤 결말로 넘어간다.
+export const RITUAL_FAILURE_TEXT = [
+  "장로의 선택이 빗나갔다.",
+  "붉은달이 핏빛으로 타오르기 시작한다.",
+  "마을 사람들이 홀린 듯 하나둘 집 밖으로 걸어 나온다. 낮게 웅얼거리는 주문 소리가 겹쳐 든다.",
+  "그리고 — 거대한 늑대가 어둠 속에서 걸어 나와, 마을을 집어삼킨다.",
+];
+
+export const TIMEOUT_FAILURE_LINE = "이레가 지나도록 배신자를 끝내 가두지 못했다. 붉은달의 저주가 마을을 뒤덮는다.";

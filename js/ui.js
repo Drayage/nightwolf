@@ -1,5 +1,5 @@
-// 렌더 — 타이틀 / 하루 진행 / 종료 화면. DOM 전용, 게임 규칙은 engine.js에 있음.
-import { startRun, jail, release, execute } from "./engine.js";
+// 렌더 — 타이틀 / 밤(듣기) / 낮(증언·처형) / 종료 화면. DOM 전용, 게임 규칙은 engine.js에 있음.
+import { startRun, revealDay, jail, release, execute } from "./engine.js";
 import { RELIC_INFO, TITLE, INTRO_TEXT } from "./data/relics.js";
 import { saveGame, loadGame, clearGame, saveMarks, loadMarks, clearMarks } from "./storage.js";
 import { playSfx } from "./audio.js";
@@ -58,7 +58,8 @@ function openRelicInfo(relicId) {
 function render() {
   if (!state) return renderTitle();
   if (state.status !== "playing") return renderEnd();
-  return renderRun();
+  if (state.phase === "night") return renderNight();
+  return renderDay();
 }
 
 function renderTitle() {
@@ -90,26 +91,95 @@ function renderTitle() {
   );
 }
 
+// 밤: 아직 아무 말도 공개되지 않는다. 주민 하나를 눌러 귀를 기울이면, 그날 밤 그 사람이
+// 누군가에게 능력을 썼거나 누군가의 능력을 받은 적이 있을 때만 낮은 웅성거림이 들린다.
+function renderNight() {
+  gameArea.innerHTML = "";
+  actionBar.innerHTML = "";
+
+  const nightNumber = state.day - 1;
+  const involvement = new Set(state.nightInvolvement || []);
+  const alive = state.villagers.filter((v) => v.alive);
+
+  const header = el("h2", { class: "run-header" }, `${nightNumber}일째 밤`);
+  const hint = el("p", { class: "intro-line" }, "아무것도 보이지 않는다. 한 사람씩 짚어 귀를 기울여 본다.");
+
+  const cards = el(
+    "section",
+    { class: "villagers" },
+    alive.map((v) =>
+      el(
+        "button",
+        {
+          class: `villager-card night-card${v.jailed ? " jailed" : ""}`,
+          onClick: () => {
+            playSfx(RITUAL, "tap");
+            if (involvement.has(v.id)) playSfx(RITUAL, "murmur");
+          },
+        },
+        [
+          el("div", { class: "villager-name" }, v.name),
+          el("div", { class: "villager-status" }, v.jailed ? "감옥에 갇힘" : "귀 기울이기"),
+        ]
+      )
+    )
+  );
+
+  gameArea.appendChild(el("div", { class: "screen run-screen" }, [header, hint, cards]));
+
+  actionBar.appendChild(
+    el(
+      "button",
+      {
+        class: "primary-button",
+        onClick: () => {
+          playSfx(RITUAL, "confirm");
+          state = revealDay(state);
+          persist();
+          render();
+        },
+      },
+      "낮이 밝았다"
+    )
+  );
+}
+
 function renderEnd() {
   gameArea.innerHTML = "";
   actionBar.innerHTML = "";
 
-  const headingByStatus = {
-    won: "의식이 완성되었다",
-    lost: "의식은 실패했다",
-  };
-  const bodyByStatus = {
-    won: `${state.day}일 만에 붉은달의 저주를 막아냈다.`,
-    lost: state.lossReason,
-  };
+  const won = state.status === "won";
+  const children = [el("h1", {}, won ? "의식이 완성되었다" : "의식은 실패했다")];
 
-  gameArea.appendChild(
-    el("div", { class: "screen end-screen" }, [
-      el("h1", {}, headingByStatus[state.status] ?? headingByStatus.lost),
-      el("p", {}, bodyByStatus[state.status] ?? bodyByStatus.lost),
-    ])
-  );
-  playSfx(RITUAL, state.status === "won" ? "win" : "error");
+  if (won) {
+    children.push(el("p", {}, `${state.day}일 만에 붉은달의 저주를 막아냈다.`));
+  } else {
+    const endingLines = state.log.filter((e) => e.day === state.day && e.phase === "ending").map((e) => e.text);
+    for (const line of endingLines.length ? endingLines : [state.lossReason]) {
+      children.push(el("p", { class: "intro-line" }, line));
+    }
+    if (state.revealTable) {
+      children.push(
+        el("table", { class: "reveal-table" }, [
+          el("thead", {}, el("tr", {}, [el("th", {}, "이름"), el("th", {}, "시작 유물"), el("th", {}, "마지막 유물")])),
+          el(
+            "tbody",
+            {},
+            state.revealTable.map((row) =>
+              el("tr", {}, [
+                el("td", {}, row.name),
+                el("td", {}, RELIC_INFO[row.startingRelic]?.name ?? row.startingRelic),
+                el("td", {}, RELIC_INFO[row.endingRelic]?.name ?? row.endingRelic),
+              ])
+            )
+          ),
+        ])
+      );
+    }
+  }
+
+  gameArea.appendChild(el("div", { class: "screen end-screen" }, children));
+  playSfx(RITUAL, won ? "win" : "error");
 
   actionBar.appendChild(
     el(
@@ -129,14 +199,14 @@ function renderEnd() {
   );
 }
 
-function renderRun() {
+function renderDay() {
   gameArea.innerHTML = "";
   actionBar.innerHTML = "";
 
-  const dayLog = state.log.filter((entry) => entry.day === state.day);
+  const dayLog = state.log.filter((entry) => entry.day === state.day && entry.phase === "day");
   const alive = state.villagers.filter((v) => v.alive);
 
-  const header = el("h2", { class: "run-header" }, `${state.day}일째 밤 / 최대 ${state.maxDays}일`);
+  const header = el("h2", { class: "run-header" }, `${state.day}일째 낮 (최대 ${state.maxDays}일)`);
 
   const logBox = el(
     "section",

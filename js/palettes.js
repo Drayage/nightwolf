@@ -33,6 +33,12 @@ export const RITUAL = {
       { t: "tone", wave: "sine", freq: 147, dur: 1.8, gain: 0.28, attack: 0.3, lp: 700 },
       { t: "tone", wave: "sine", freq: 196, dur: 2.0, gain: 0.2, attack: 0.5, lp: 700 },
     ],
+
+    // 밤에 누군가에게 귀 기울였을 때, 그 사람이 오늘 밤 능력에 얽혔다면 들리는 낮은 웅성거림
+    murmur: [
+      { t: "tone", wave: "sine", freq: 145, freqEnd: 110, dur: 0.4, gain: 0.3, attack: 0.05, lp: 600 },
+      { t: "noise", dur: 0.3, gain: 0.15, lp: 350 },
+    ],
   },
   bgm: {
     main: {

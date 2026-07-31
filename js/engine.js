@@ -2,10 +2,12 @@
 // 모든 무작위성은 인자로 받은 rng 함수를 통해서만 쓴다 (Math.random 직접 호출 금지 —
 // 안 그러면 scripts/simulate.mjs의 seed 기반 재현이 깨진다).
 //
-// 유물은 더 이상 "한 번 배정되면 끝"이 아니다 — 도둑/문제아/취객이 밤마다 실제로
-// 유물을 맞바꾸므로(원작 그대로, 다만 하룻밤이 아니라 매일 밤 반복) villager.relic이
-// 그 사람의 "지금" 정체다. 제물의 유물도 같은 원리: villagers 중 relic이 'sacrifice'인
-// 사람 전원이 그 순간의 위협이고(여러 명일 수 있다), 별도 ID로 추적하지 않는다.
+// 유물은 주머니 속에 있어 아무도 "지금" 자기가 뭔지 모른다(villager.relic이 기계적으로
+// 현재 정체 — 위협 판정·다음 밤 행동 결정에 쓰임). 낮에 하는 말은 villager.belief를
+// 바탕으로 한다 — 자기가 직접 행동했을 때만 갱신되는, "내가 기억하는 나"다. 그래서
+// 말하는 유물과 실제 유물이 다를 수 있다. 제물의 유물도 같은 원리로 relic이 유일한
+// 출처: relic이 'sacrifice'인 사람 전원이 그 순간의 위협이고(여러 명일 수 있다),
+// 별도 ID로 추적하지 않는다.
 import {
   DEFAULT_RELIC_LAYOUT,
   BOX_SEED,
@@ -16,6 +18,8 @@ import {
   NERVOUS_MOOD,
   MADNESS_EXECUTION_LINE,
   SACRIFICE_PLANTED_LINE,
+  RITUAL_FAILURE_TEXT,
+  TIMEOUT_FAILURE_LINE,
 } from "./data/relics.js";
 
 function pick(rng, arr) {
@@ -47,24 +51,6 @@ function drawFromBox(rng, box) {
   return box.splice(idx, 1)[0];
 }
 
-// 제물/하수인의 "무슨 유물이라고 사칭할지"를 정한다(한 번 정하면 안 바뀜 — 거짓말도
-// 일관성이 있어야 추궁이 성립한다). 이미 claimRole이 있는 사람은 건너뛴다 — 도둑의
-// 유물에 휘말려 새로 제물/하수인이 된 사람만 이 시점에 처음 커버 스토리를 얻는다.
-// 제물은 살아있는 사람들 중 실제로 존재하는 "진짜" 유물을 사칭하고(정원 초과 추궁이
-// 걸리기 쉬움), 하수인은 그보다 훨씬 안일하게 유물함 안을 대충 훑어보고 그중 하나를
-// 자기 것인 척한다. villagers를 제자리에서 바꾸므로 새로 복제된 배열에만 호출할 것.
-function ensureClaimRoles(rng, villagers, box) {
-  const honestPresent = [...new Set(villagers.map((v) => v.relic))].filter((r) => HONEST_RELICS.includes(r));
-  const villagerPool = honestPresent.length > 0 ? honestPresent : ["villager"];
-  const boxPool = [...new Set(box)].filter((r) => HONEST_RELICS.includes(r));
-  const minionPool = boxPool.length > 0 ? boxPool : ["villager"];
-  for (const v of villagers) {
-    if (v.claimRole) continue;
-    if (v.relic === "sacrifice") v.claimRole = pick(rng, villagerPool);
-    else if (v.relic === "minion") v.claimRole = pick(rng, minionPool);
-  }
-}
-
 export function createVillage(rng) {
   const relics = shuffle(rng, DEFAULT_RELIC_LAYOUT);
   const names = drawNames(rng, relics.length);
@@ -72,106 +58,138 @@ export function createVillage(rng) {
     id: `v${i}`,
     name: names[i],
     relic,
+    startingRelic: relic, // 결말 공개용, 절대 안 바뀜
     alive: true,
     jailed: false,
+    belief: { role: relic }, // "내가 기억하는 나" — 처음엔 원래 유물 그대로
   }));
   const box = [...BOX_SEED];
-
-  ensureClaimRoles(rng, villagers, box);
-
   return { villagers, box };
 }
 
-// ── 매일 밤 캐스케이드: 도둑 → 문제아 → 취객 (원작 기상 순서) ────────
-// 셋 다 "지금 그 유물을 쥔 사람"이 수행한다 — 그 유물이 밤마다 다른 사람에게
-// 넘어갈 수 있으므로, 매번 새로 찾는다.
-function cascadeRobber(rng, villagers) {
+// ── 매일 밤 캐스케이드: 비밀요원 → 천리안 → 도둑 → 문제아 → 취객 (원작 기상 순서) ──
+// 전부 "지금 그 유물을 쥔 사람"이 수행한다 — 그 유물이 밤마다 다른 사람에게 넘어갈
+// 수 있으므로 매번 새로 찾는다. belief는 오직 "행동한 사람"만 갱신된다 — 도둑맞은
+// 쪽/문제아에게 휘말린 쪽은 아무것도 모른 채 자기가 알던 대로만 계속 믿는다.
+function nightMason(villagers) {
+  const masons = villagers.filter((v) => v.relic === "mason" && v.alive && !v.jailed);
+  if (masons.length >= 2) {
+    const [a, b] = masons;
+    a.belief = { role: "mason", partnerName: b.name };
+    b.belief = { role: "mason", partnerName: a.name };
+    a.involvedTonight = true;
+    b.involvedTonight = true;
+  } else if (masons.length === 1) {
+    masons[0].belief = { role: "mason", partnerName: null };
+  }
+}
+
+function nightSeer(rng, villagers) {
+  const seer = villagers.find((v) => v.relic === "seer" && v.alive && !v.jailed);
+  if (!seer) return;
+  const others = villagers.filter((v) => v.alive && v.id !== seer.id);
+  if (others.length === 0) return;
+  const target = pick(rng, others);
+  const strange = target.relic === "sacrifice" || target.relic === "minion";
+  seer.belief = { role: "seer", targetId: target.id, targetName: target.name, strange };
+  seer.involvedTonight = true;
+  target.involvedTonight = true;
+}
+
+function nightRobber(rng, villagers) {
   const robber = villagers.find((v) => v.relic === "robber" && v.alive && !v.jailed);
   if (!robber) return;
   const others = villagers.filter((v) => v.alive && v.id !== robber.id);
   if (others.length === 0) return;
   const target = pick(rng, others);
   [robber.relic, target.relic] = [target.relic, robber.relic];
-  // robber(원래 도둑)는 오늘 밤 target의 정체를 훔쳐서 새 역할이 됐다 — 그 사실을 알고
-  // 있으므로, 오늘 낮 자신의(새 역할) 증언에 "누구 걸 훔쳤는지"를 덧붙일 수 있다.
-  // target은 반대로 영문도 모른 채 도둑의 유물을 떠안는다.
-  robber.stoleFrom = target.name;
+  // robber는 누구와 바꿨는지는 알지만(주머니 밖 행동), 뭘 받았는지는 안을 안 봐서 모른다.
+  // target은 자기 유물이 바뀐 줄도 모른다 — belief 그대로 둔다.
+  robber.belief = { role: "robber", swappedWithName: target.name };
+  robber.involvedTonight = true;
+  target.involvedTonight = true;
 }
 
-function cascadeTroublemaker(rng, villagers) {
+function nightTroublemaker(rng, villagers) {
   const troublemaker = villagers.find((v) => v.relic === "troublemaker" && v.alive && !v.jailed);
   if (!troublemaker) return;
   const others = villagers.filter((v) => v.alive && v.id !== troublemaker.id);
   if (others.length < 2) return;
   const [a, b] = shuffle(rng, others);
   [a.relic, b.relic] = [b.relic, a.relic];
-  troublemaker.tonightSwap = [a.name, b.name]; // 오늘 밤의 진짜 근거 — 매일 갱신
+  troublemaker.belief = { role: "troublemaker", targetName: a.name, targetName2: b.name };
+  troublemaker.involvedTonight = true;
+  a.involvedTonight = true;
+  b.involvedTonight = true;
 }
 
-function cascadeDrunk(rng, villagers, box) {
+function nightDrunk(rng, villagers, box) {
   const drunk = villagers.find((v) => v.relic === "drunk" && v.alive && !v.jailed);
   if (!drunk) return;
   box.push(drunk.relic);
   drunk.relic = drawFromBox(rng, box) ?? drunk.relic; // 방금 넣었으니 박스가 비어있을 리 없음
+  drunk.belief = { role: "drunk" };
+  drunk.involvedTonight = true;
+}
+
+// 제물/하수인의 사칭(claimRole)은 처음 그 역할이 됐을 때 한 번만 정해지고 안 바뀐다.
+// 사칭의 "구체적 근거"(누굴 봤다, 누구랑 바꿨다 등)는 매일 밤 새로 지어낸다 — 진짜
+// 능력이 있는 척하려면 매일 그럴듯한 최신 정보를 대야 하기 때문이다(로버만 예외 —
+// 원래도 "모른다"가 정답이라 지어낼 필요가 없다).
+function refreshFakeBeliefs(rng, villagers, box) {
+  const honestPresent = [...new Set(villagers.map((v) => v.relic))].filter((r) => HONEST_RELICS.includes(r));
+  const villagerPool = honestPresent.length > 0 ? honestPresent : ["villager"];
+  const boxPool = [...new Set(box)].filter((r) => HONEST_RELICS.includes(r));
+  const minionPool = boxPool.length > 0 ? boxPool : ["villager"];
+
+  for (const v of villagers) {
+    if (v.relic !== "sacrifice" && v.relic !== "minion") continue;
+    if (!v.claimRole) v.claimRole = pick(rng, v.relic === "sacrifice" ? villagerPool : minionPool);
+
+    const role = v.claimRole;
+    const others = villagers.filter((o) => o.alive && o.id !== v.id);
+    const fake = { role };
+    if (role === "seer") {
+      if (others.length > 0) {
+        const t = pick(rng, others);
+        fake.targetId = t.id;
+        fake.targetName = t.name;
+        fake.strange = rng() < 0.5;
+      }
+    } else if (role === "troublemaker") {
+      if (others.length >= 2) {
+        const [a, b] = shuffle(rng, others);
+        fake.targetName = a.name;
+        fake.targetName2 = b.name;
+      }
+    } else if (role === "mason") {
+      if (others.length > 0) fake.partnerName = pick(rng, others).name;
+    }
+    v.fakeBelief = fake;
+  }
 }
 
 function isThreat(v) {
   return v.relic === "sacrifice" || v.relic === "minion";
 }
 
-// 낮 증언 한 줄 — "나는 [유물]이다. [구체적 근거]." 형태의 확인 가능한 주장을 만든다.
-// "정보가 진짜인가"는 화자가 실제로(오늘 밤 기준) 그 유물을 갖고 있는가(reliable)로
-// 결정한다. 같은 유물을 주장하는 사람이 정원(ROLE_SLOTS)보다 많으면 그 자체가 추궁 단서.
-function buildClaim(rng, state, speaker) {
-  const role = speaker.relic === "sacrifice" || speaker.relic === "minion" ? speaker.claimRole : speaker.relic;
-  const reliable = speaker.relic === role;
+// 낮 증언 한 줄 — belief(또는 사칭이면 fakeBelief)를 그대로 문장으로 옮긴다.
+// 같은 유물을 주장하는 사람이 정원(ROLE_SLOTS)보다 많으면 그 자체가 추궁 단서.
+function buildPendingClaim(rng, speaker) {
   const threat = isThreat(speaker);
-  const others = state.villagers.filter((v) => v.alive && v.id !== speaker.id);
+  const belief = threat ? speaker.fakeBelief : speaker.belief;
+  if (!belief) return null;
 
-  const ctx = {};
-  let targetId;
-
-  if (role === "seer") {
-    if (others.length === 0) return null;
-    const target = pick(rng, others);
-    targetId = target.id;
-    const trueStrange = target.relic === "sacrifice" || target.relic === "minion";
-    ctx.strange = reliable ? trueStrange : rng() < 0.5; // 진짜가 아니면 근거 없이 지어낸 값
-    ctx.targetName = target.name;
-  } else if (role === "troublemaker") {
-    if (reliable) {
-      ctx.targetName = speaker.tonightSwap?.[0] ?? null;
-      ctx.targetName2 = speaker.tonightSwap?.[1] ?? null;
-    } else if (others.length >= 2) {
-      const [a, b] = shuffle(rng, others);
-      ctx.targetName = a.name;
-      ctx.targetName2 = b.name;
-    }
-  } else if (role === "mason") {
-    const realPartner = state.villagers.find((v) => v.relic === "mason" && v.alive && v.id !== speaker.id);
-    if (reliable) {
-      ctx.partnerName = realPartner ? realPartner.name : null;
-    } else if (others.length > 0) {
-      ctx.partnerName = pick(rng, others).name; // 진짜 결계의 유물 소지자와는 다른 이름일 확률이 높음
-    }
-  }
-
-  let line = (CLAIM_LINES[role] || CLAIM_LINES.villager)(ctx);
-  // 오늘 밤 도둑질로 지금 이 역할을 갖게 됐다면, 누구 것을 훔쳤는지 스스로 밝힐 수 있다
-  // (다른 유물로 사칭 중인 제물/하수인이 이 사실을 알 리는 없으니 threat면 건너뛴다).
-  if (!threat && speaker.stoleFrom) {
-    line += ` 사실 어젯밤 도둑의 유물로 ${speaker.stoleFrom}의 유물을 훔쳐온 거예요.`;
-  }
-
+  const role = belief.role;
+  const line = (CLAIM_LINES[role] || CLAIM_LINES.villager)(belief);
   let mood = "";
   if (threat) mood = " " + pick(rng, CORRUPTED_MOOD);
   else if (role === "villager" && rng() < 0.3) mood = " " + pick(rng, NERVOUS_MOOD);
 
   return {
-    day: state.day,
     phase: "day",
     text: `${speaker.name}: "${line}"${mood}`,
-    meta: { kind: "claim", speakerId: speaker.id, claimedRole: role, targetId, strange: ctx.strange },
+    meta: { kind: "claim", speakerId: speaker.id, claimedRole: role, targetId: belief.targetId, strange: belief.strange },
   };
 }
 
@@ -179,37 +197,46 @@ function nameOf(state, id) {
   return state.villagers.find((v) => v.id === id)?.name ?? "???";
 }
 
+// 밤 페이즈: 캐스케이드 + 오늘 낮에 할 말을 전부 미리 정해두지만, 아직 log에는 넣지
+// 않는다(pendingClaims) — 플레이어가 "낮이 밝았다"를 눌러야 공개된다(revealDay).
 function runNightPhase(state, rng) {
   const log = [...state.log];
-  log.push({
-    day: state.day,
-    phase: "night",
-    text: "붉은달이 떠올랐다. 마을은 다시 한번 의식의 밤을 맞이한다.",
-  });
+  log.push({ day: state.day, phase: "night", text: "붉은달이 떠올랐다. 마을은 다시 한번 의식의 밤을 맞이한다." });
 
-  // 오늘 밤 캐스케이드는 여기서만 일어나므로, 이전 상태와 공유되던 참조를 먼저 떼어낸다.
-  // stoleFrom은 "바로 어젯밤" 도둑맞았을 때만 유효한 정보라 매일 밤 초기화한다.
-  const villagers = state.villagers.map((v) => ({ ...v, stoleFrom: undefined }));
+  const villagers = state.villagers.map((v) => ({ ...v, involvedTonight: false }));
   const box = [...state.box];
 
-  cascadeRobber(rng, villagers);
-  cascadeTroublemaker(rng, villagers);
-  cascadeDrunk(rng, villagers, box);
-  ensureClaimRoles(rng, villagers, box); // 캐스케이드로 새로 제물/하수인이 된 사람에게 커버 부여
+  nightMason(villagers);
+  nightSeer(rng, villagers);
+  nightRobber(rng, villagers);
+  nightTroublemaker(rng, villagers);
+  nightDrunk(rng, villagers, box);
+  refreshFakeBeliefs(rng, villagers, box);
 
-  const nextState = { ...state, villagers, box };
-
+  const pendingClaims = [];
   for (const speaker of villagers.filter((v) => v.alive)) {
-    const claim = buildClaim(rng, nextState, speaker);
-    if (claim) log.push(claim);
+    const claim = buildPendingClaim(rng, speaker);
+    if (claim) pendingClaims.push({ day: state.day, ...claim });
   }
 
-  return { ...nextState, log };
+  const nightInvolvement = villagers.filter((v) => v.alive && v.involvedTonight).map((v) => v.id);
+
+  return { ...state, villagers, box, phase: "night", pendingClaims, nightInvolvement, log };
+}
+
+// 밤에 정해둔 오늘의 증언을 실제로 공개한다 — "낮이 밝았다" 버튼에서 호출.
+export function revealDay(state) {
+  if (state.phase !== "night") return state;
+  return {
+    ...state,
+    phase: "day",
+    log: [...state.log, ...(state.pendingClaims || [])],
+    pendingClaims: [],
+  };
 }
 
 export function startRun(rng) {
   const { villagers, box } = createVillage(rng);
-
   const initial = {
     day: 1,
     maxDays: 7,
@@ -218,11 +245,11 @@ export function startRun(rng) {
     log: [],
     status: "playing",
   };
-
   return runNightPhase(initial, rng);
 }
 
 export function jail(state, id) {
+  if (state.status !== "playing") return state;
   const target = state.villagers.find((v) => v.id === id);
   if (!target || target.jailed) return state; // 이미 갇혀있으면 할 일 없음
 
@@ -236,11 +263,7 @@ export function jail(state, id) {
 
   const log = [...state.log];
   if (previouslyJailed) {
-    log.push({
-      day: state.day,
-      phase: "day",
-      text: `감옥은 한 자리뿐이라, ${previouslyJailed.name}이(가) 먼저 풀려났다.`,
-    });
+    log.push({ day: state.day, phase: "day", text: `감옥은 한 자리뿐이라, ${previouslyJailed.name}이(가) 먼저 풀려났다.` });
   }
   log.push({ day: state.day, phase: "day", text: `장로가 ${nameOf(state, id)}을(를) 감옥에 가뒀다.` });
 
@@ -248,12 +271,17 @@ export function jail(state, id) {
 }
 
 export function release(state, id) {
+  if (state.status !== "playing") return state;
   const villagers = state.villagers.map((v) => (v.id === id ? { ...v, jailed: false } : v));
   return {
     ...state,
     villagers,
     log: [...state.log, { day: state.day, phase: "day", text: `장로가 ${nameOf(state, id)}을(를) 풀어주었다.` }],
   };
+}
+
+function buildRevealTable(villagers) {
+  return villagers.map((v) => ({ id: v.id, name: v.name, startingRelic: v.startingRelic, endingRelic: v.relic }));
 }
 
 export function execute(state, id, rng) {
@@ -273,12 +301,10 @@ export function execute(state, id, rng) {
       ...state,
       villagers,
       box,
-      log: [
-        ...log,
-        { day: state.day, phase: "day", text: `${target.name}은(는) 제물의 유물 소지자가 아니었다. 의식이 어긋났다...` },
-      ],
+      log: [...log, ...RITUAL_FAILURE_TEXT.map((text) => ({ day: state.day, phase: "ending", text }))],
       status: "lost",
       lossReason: "잘못된 제물을 바쳐 의식이 실패했습니다.",
+      revealTable: buildRevealTable(villagers),
     };
   }
 
@@ -318,9 +344,10 @@ export function execute(state, id, rng) {
       ...state,
       villagers,
       box,
-      log: [...log, { day: state.day, phase: "day", text: "하수인을 끝내 잡지 못한 채 이레가 지났다..." }],
+      log: [...log, { day: state.day, phase: "day", text: TIMEOUT_FAILURE_LINE }],
       status: "lost",
       lossReason: "기한 내에 제물을 모두 막지 못했습니다.",
+      revealTable: buildRevealTable(villagers),
     };
   }
 
@@ -344,6 +371,7 @@ export function createGame(rng) {
 }
 
 export function stepGame(game) {
+  if (game.state.phase === "night") game.state = revealDay(game.state);
   const move = decideElderMove(game.state);
   let state = game.state;
   if (move.jailId) state = jail(state, move.jailId);

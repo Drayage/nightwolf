@@ -59,24 +59,21 @@ export const RELIC_INFO = {
 // 진짜 정체를 감출 때 사칭 대상이 될 수 있는 "진짜" 유물들 (제물/하수인 제외).
 export const HONEST_RELICS = ["villager", "seer", "robber", "troublemaker", "drunk", "madness", "mason"];
 
-// 유일 배정 유물의 정원 (초과 주장이 나오면 그중 최소 하나는 거짓 — 추궁 포인트).
-// villager는 정원 제한 없음(여럿이어도 정상)이라 여기 없음.
-export const ROLE_SLOTS = { seer: 1, robber: 1, troublemaker: 1, drunk: 1, madness: 1, mason: 2 };
+// 예지의 유물이 (진짜든 사칭이든) "봤다"고 말할 수 있는 유물 전체 — 제물/하수인도 포함.
+export const ALL_RELICS = [...HONEST_RELICS, "sacrifice", "minion"];
 
-// 11명 마을: 제물+하수인+원작 특수 역할 각 1(결계는 2) + 평범 2.
-export const DEFAULT_RELIC_LAYOUT = [
-  "sacrifice",
-  "minion",
-  "seer",
-  "robber",
-  "troublemaker",
-  "drunk",
-  "madness",
-  "mason",
-  "mason",
-  "villager",
-  "villager",
+export const VILLAGE_SIZE = 11;
+
+// 마을 구성은 매 런 무작위다 — 제물/하수인만 정확히 1명씩 고정이고, 나머지는 겹치거나
+// 아예 안 나올 수도 있다(결계만 예외: 항상 짝수 명). js/engine.js의 generateRelicLayout
+// 참고. 정원(ROLE_SLOTS)은 더 이상 "항상 1명"을 보장하지 않는, 그저 봇 추리용 기본값이다.
+export const DUPLICATABLE_RELICS = ["seer", "robber", "troublemaker", "drunk", "madness", "villager"];
+export const MASON_COUNT_WEIGHTS = [
+  [0, 1],
+  [2, 6],
+  [4, 1],
 ];
+export const ROLE_SLOTS = { seer: 1, robber: 1, troublemaker: 1, drunk: 1, madness: 1, mason: 2 };
 
 // 유물함(중앙 유물 풀)의 초기 여분 — 원작의 "인원수+3장" 관례를 따른다.
 export const BOX_SEED = ["villager", "villager", "villager"];
@@ -100,13 +97,13 @@ export const copula = (word) => (hasBatchim(word) ? "이에요" : "예요");
 // 자기가 한 행동(혹은 계속 같은 자기 인식)을 말할 뿐이다 — 그래서 말하는 유물과
 // 지금 실제로 들고 있는 유물이 다를 수 있다. 능동적으로 뭔가를 "한" 유물(예지/도둑/
 // 문제아/취객)은 과거형으로, 그냥 "그런 사람"인 유물(평범/결계/광기)은 현재형으로 쓴다.
-// belief: { role, targetName, targetName2, strange, partnerName, swappedWithName }
+// belief: { role, targetName, targetName2, targetRelic, partnerName, swappedWithName }
 export const CLAIM_LINES = {
   villager: () => "저는 평범한 유물이에요. 특별히 본 건 없어요.",
   seer: (belief) =>
     `어젯밤 예지의 유물을 썼어요. ${belief.targetName}의 유물을 몰래 봤는데, ${
-      belief.strange ? "뭔가... 이상했어요." : "평범해 보였어요."
-    }`,
+      RELIC_INFO[belief.targetRelic]?.name ?? "알 수 없는 유물"
+    }이었어요.`,
   robber: (belief) =>
     belief.swappedWithName
       ? `어젯밤 도둑의 유물을 썼어요. ${belief.swappedWithName}${and(belief.swappedWithName)} 유물을 통째로 바꿨는데, 지금 제가 뭘 가졌는지는 저도 몰라요.`
@@ -154,3 +151,8 @@ export const RITUAL_FAILURE_TEXT = [
 ];
 
 export const TIMEOUT_FAILURE_LINE = "이레가 지나도록 배신자를 끝내 가두지 못했다. 붉은달의 저주가 마을을 뒤덮는다.";
+
+// 밤에 한 사람에게 귀 기울였을 때: 그날 밤 능력에 얽혔으면(행위자든 대상이든) vs 아니면.
+export function nightListenLine(name, involved) {
+  return involved ? `${name} 쪽에서 낮게 웅성거리는 소리가 들렸다...` : `${name} 쪽은 고요하다.`;
+}

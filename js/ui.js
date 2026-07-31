@@ -1,5 +1,5 @@
 // 렌더 — 타이틀 / 밤(듣기) / 낮(증언·처형) / 종료 화면. DOM 전용, 게임 규칙은 engine.js에 있음.
-import { startRun, revealDay, jail, release, execute } from "./engine.js";
+import { startRun, revealDay, listenTo, jail, release, execute, continueAfterExecution } from "./engine.js";
 import { RELIC_INFO, TITLE, INTRO_TEXT } from "./data/relics.js";
 import { saveGame, loadGame, clearGame, saveMarks, loadMarks, clearMarks } from "./storage.js";
 import { playSfx } from "./audio.js";
@@ -59,6 +59,7 @@ function render() {
   if (!state) return renderTitle();
   if (state.status !== "playing") return renderEnd();
   if (state.phase === "night") return renderNight();
+  if (state.phase === "executed") return renderExecuted();
   return renderDay();
 }
 
@@ -91,8 +92,9 @@ function renderTitle() {
   );
 }
 
-// 밤: 아직 아무 말도 공개되지 않는다. 주민 하나를 눌러 귀를 기울이면, 그날 밤 그 사람이
-// 누군가에게 능력을 썼거나 누군가의 능력을 받은 적이 있을 때만 낮은 웅성거림이 들린다.
+// 밤: 아직 아무 말도 공개되지 않는다. 주민 하나만 짚어 귀를 기울일 수 있고, 그 사람이
+// 그날 밤 누군가에게 능력을 썼거나 능력을 받은 적이 있으면 소리와 함께 글도 뜬다.
+// 한 번 고르고 나면 그날 밤은 그걸로 끝 — 다른 사람은 더 짚을 수 없다.
 function renderNight() {
   gameArea.innerHTML = "";
   actionBar.innerHTML = "";
@@ -100,32 +102,54 @@ function renderNight() {
   const nightNumber = state.day - 1;
   const involvement = new Set(state.nightInvolvement || []);
   const alive = state.villagers.filter((v) => v.alive);
+  const listened = state.nightListenedId;
 
   const header = el("h2", { class: "run-header" }, `${nightNumber}일째 밤`);
-  const hint = el("p", { class: "intro-line" }, "아무것도 보이지 않는다. 한 사람씩 짚어 귀를 기울여 본다.");
+  const hint = el(
+    "p",
+    { class: "intro-line" },
+    listened ? "이미 한 사람에게 귀를 기울였다." : "아무것도 보이지 않는다. 딱 한 사람만 짚어 귀를 기울일 수 있다."
+  );
+
+  const nightLog = el(
+    "section",
+    { class: "log" },
+    state.log.filter((e) => e.day === state.day && e.phase === "night").map((e) => el("p", { class: "log-line night" }, e.text))
+  );
 
   const cards = el(
     "section",
     { class: "villagers" },
-    alive.map((v) =>
-      el(
+    alive.map((v) => {
+      const disabled = listened && listened !== v.id;
+      return el(
         "button",
         {
-          class: `villager-card night-card${v.jailed ? " jailed" : ""}`,
+          class: `villager-card night-card${v.jailed ? " jailed" : ""}${disabled ? " night-card-disabled" : ""}`,
           onClick: () => {
+            if (disabled) return;
+            if (listened === v.id) {
+              // 이미 고른 사람은 다시 눌러 소리만 재생(로그는 중복으로 안 쌓임)
+              playSfx(RITUAL, "tap");
+              if (involvement.has(v.id)) playSfx(RITUAL, "murmur");
+              return;
+            }
             playSfx(RITUAL, "tap");
             if (involvement.has(v.id)) playSfx(RITUAL, "murmur");
+            state = listenTo(state, v.id);
+            persist();
+            render();
           },
         },
         [
           el("div", { class: "villager-name" }, v.name),
-          el("div", { class: "villager-status" }, v.jailed ? "감옥에 갇힘" : "귀 기울이기"),
+          el("div", { class: "villager-status" }, v.jailed ? "감옥에 갇힘" : listened === v.id ? "귀 기울이는 중" : "귀 기울이기"),
         ]
-      )
-    )
+      );
+    })
   );
 
-  gameArea.appendChild(el("div", { class: "screen run-screen" }, [header, hint, cards]));
+  gameArea.appendChild(el("div", { class: "screen run-screen" }, [header, hint, nightLog, cards]));
 
   actionBar.appendChild(
     el(
@@ -140,6 +164,33 @@ function renderNight() {
         },
       },
       "낮이 밝았다"
+    )
+  );
+}
+
+// 처형 직후: 결과는 아직 감춰져 있다("처형했다"만 보임). "계속"을 눌러야 실제 결과가 드러난다.
+function renderExecuted() {
+  gameArea.innerHTML = "";
+  actionBar.innerHTML = "";
+
+  const todayLog = state.log.filter((e) => e.day === state.day && e.phase === "day");
+  const logBox = el("section", { class: "log" }, todayLog.map((e) => el("p", { class: "log-line day" }, e.text)));
+
+  gameArea.appendChild(el("div", { class: "screen run-screen" }, [el("h2", { class: "run-header" }, "..."), logBox]));
+
+  actionBar.appendChild(
+    el(
+      "button",
+      {
+        class: "primary-button",
+        onClick: () => {
+          playSfx(RITUAL, "tap");
+          state = continueAfterExecution(state);
+          persist();
+          render();
+        },
+      },
+      "계속"
     )
   );
 }

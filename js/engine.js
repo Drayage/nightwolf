@@ -9,7 +9,10 @@
 // 출처: relic이 'sacrifice'인 사람 전원이 그 순간의 위협이고(여러 명일 수 있다),
 // 별도 ID로 추적하지 않는다.
 import {
-  DEFAULT_RELIC_LAYOUT,
+  VILLAGE_SIZE,
+  DUPLICATABLE_RELICS,
+  MASON_COUNT_WEIGHTS,
+  ALL_RELICS,
   BOX_SEED,
   VILLAGER_NAME_POOL,
   HONEST_RELICS,
@@ -20,6 +23,7 @@ import {
   SACRIFICE_PLANTED_LINE,
   RITUAL_FAILURE_TEXT,
   TIMEOUT_FAILURE_LINE,
+  nightListenLine,
 } from "./data/relics.js";
 
 function pick(rng, arr) {
@@ -51,8 +55,34 @@ function drawFromBox(rng, box) {
   return box.splice(idx, 1)[0];
 }
 
+function weightedPick(rng, weightedOptions) {
+  const total = weightedOptions.reduce((sum, [, w]) => sum + w, 0);
+  let r = rng() * total;
+  for (const [value, w] of weightedOptions) {
+    if (r < w) return value;
+    r -= w;
+  }
+  return weightedOptions[weightedOptions.length - 1][0];
+}
+
+// 마을 구성을 무작위로 정한다 — 제물/하수인만 1명씩 고정, 결계는 항상 짝수(0/2/4,
+// 2가 가장 흔함), 나머지 칸은 예지/도둑/문제아/취객/광기/평범 중에서 칸마다 독립적으로
+// 뽑는다. 그래서 어떤 유물이 아예 안 나올 수도, 여러 명 겹칠 수도 있다.
+function generateRelicLayout(rng, size) {
+  const layout = ["sacrifice", "minion"];
+  let remaining = size - layout.length;
+
+  const masonCount = Math.min(weightedPick(rng, MASON_COUNT_WEIGHTS), remaining);
+  for (let i = 0; i < masonCount; i++) layout.push("mason");
+  remaining -= masonCount;
+
+  for (let i = 0; i < remaining; i++) layout.push(pick(rng, DUPLICATABLE_RELICS));
+
+  return shuffle(rng, layout);
+}
+
 export function createVillage(rng) {
-  const relics = shuffle(rng, DEFAULT_RELIC_LAYOUT);
+  const relics = generateRelicLayout(rng, VILLAGE_SIZE);
   const names = drawNames(rng, relics.length);
   const villagers = relics.map((relic, i) => ({
     id: `v${i}`,
@@ -71,65 +101,74 @@ export function createVillage(rng) {
 // 전부 "지금 그 유물을 쥔 사람"이 수행한다 — 그 유물이 밤마다 다른 사람에게 넘어갈
 // 수 있으므로 매번 새로 찾는다. belief는 오직 "행동한 사람"만 갱신된다 — 도둑맞은
 // 쪽/문제아에게 휘말린 쪽은 아무것도 모른 채 자기가 알던 대로만 계속 믿는다.
-function nightMason(villagers) {
-  const masons = villagers.filter((v) => v.relic === "mason" && v.alive && !v.jailed);
-  if (masons.length >= 2) {
-    const [a, b] = masons;
+// 구성이 무작위라 결계/예지/도둑/문제아/취객 모두 같은 밤에 여러 명 나올 수 있다 —
+// 그날 밤 시작 시점에 그 유물을 쥔 사람 전원이 각자 자기 몫의 능력을 쓴다(한 명뿐이라도
+// 동작은 같다). 결계는 항상 짝수로 나오도록 설계돼 있지만, 감옥에 갇혀 이번 밤엔
+// 제외되는 경우 홀수가 될 수 있어 마지막 한 명은 짝 없이 남는다.
+function nightMason(rng, villagers) {
+  const masons = shuffle(rng, villagers.filter((v) => v.relic === "mason" && v.alive && !v.jailed));
+  for (let i = 0; i + 1 < masons.length; i += 2) {
+    const a = masons[i];
+    const b = masons[i + 1];
     a.belief = { role: "mason", partnerName: b.name };
     b.belief = { role: "mason", partnerName: a.name };
     a.involvedTonight = true;
     b.involvedTonight = true;
-  } else if (masons.length === 1) {
-    masons[0].belief = { role: "mason", partnerName: null };
+  }
+  if (masons.length % 2 === 1) {
+    masons[masons.length - 1].belief = { role: "mason", partnerName: null };
   }
 }
 
 function nightSeer(rng, villagers) {
-  const seer = villagers.find((v) => v.relic === "seer" && v.alive && !v.jailed);
-  if (!seer) return;
-  const others = villagers.filter((v) => v.alive && v.id !== seer.id);
-  if (others.length === 0) return;
-  const target = pick(rng, others);
-  const strange = target.relic === "sacrifice" || target.relic === "minion";
-  seer.belief = { role: "seer", targetId: target.id, targetName: target.name, strange };
-  seer.involvedTonight = true;
-  target.involvedTonight = true;
+  const seers = villagers.filter((v) => v.relic === "seer" && v.alive && !v.jailed);
+  for (const seer of seers) {
+    const others = villagers.filter((v) => v.alive && v.id !== seer.id);
+    if (others.length === 0) continue;
+    const target = pick(rng, others);
+    seer.belief = { role: "seer", targetId: target.id, targetName: target.name, targetRelic: target.relic };
+    seer.involvedTonight = true;
+    target.involvedTonight = true;
+  }
 }
 
 function nightRobber(rng, villagers) {
-  const robber = villagers.find((v) => v.relic === "robber" && v.alive && !v.jailed);
-  if (!robber) return;
-  const others = villagers.filter((v) => v.alive && v.id !== robber.id);
-  if (others.length === 0) return;
-  const target = pick(rng, others);
-  [robber.relic, target.relic] = [target.relic, robber.relic];
-  // robber는 누구와 바꿨는지는 알지만(주머니 밖 행동), 뭘 받았는지는 안을 안 봐서 모른다.
-  // target은 자기 유물이 바뀐 줄도 모른다 — belief 그대로 둔다.
-  robber.belief = { role: "robber", swappedWithName: target.name };
-  robber.involvedTonight = true;
-  target.involvedTonight = true;
+  const robbers = villagers.filter((v) => v.relic === "robber" && v.alive && !v.jailed);
+  for (const robber of robbers) {
+    const others = villagers.filter((v) => v.alive && v.id !== robber.id);
+    if (others.length === 0) continue;
+    const target = pick(rng, others);
+    [robber.relic, target.relic] = [target.relic, robber.relic];
+    // robber는 누구와 바꿨는지는 알지만(주머니 밖 행동), 뭘 받았는지는 안을 안 봐서 모른다.
+    // target은 자기 유물이 바뀐 줄도 모른다 — belief 그대로 둔다.
+    robber.belief = { role: "robber", swappedWithName: target.name };
+    robber.involvedTonight = true;
+    target.involvedTonight = true;
+  }
 }
 
 function nightTroublemaker(rng, villagers) {
-  const troublemaker = villagers.find((v) => v.relic === "troublemaker" && v.alive && !v.jailed);
-  if (!troublemaker) return;
-  const others = villagers.filter((v) => v.alive && v.id !== troublemaker.id);
-  if (others.length < 2) return;
-  const [a, b] = shuffle(rng, others);
-  [a.relic, b.relic] = [b.relic, a.relic];
-  troublemaker.belief = { role: "troublemaker", targetName: a.name, targetName2: b.name };
-  troublemaker.involvedTonight = true;
-  a.involvedTonight = true;
-  b.involvedTonight = true;
+  const troublemakers = villagers.filter((v) => v.relic === "troublemaker" && v.alive && !v.jailed);
+  for (const troublemaker of troublemakers) {
+    const others = villagers.filter((v) => v.alive && v.id !== troublemaker.id);
+    if (others.length < 2) continue;
+    const [a, b] = shuffle(rng, others);
+    [a.relic, b.relic] = [b.relic, a.relic];
+    troublemaker.belief = { role: "troublemaker", targetName: a.name, targetName2: b.name };
+    troublemaker.involvedTonight = true;
+    a.involvedTonight = true;
+    b.involvedTonight = true;
+  }
 }
 
 function nightDrunk(rng, villagers, box) {
-  const drunk = villagers.find((v) => v.relic === "drunk" && v.alive && !v.jailed);
-  if (!drunk) return;
-  box.push(drunk.relic);
-  drunk.relic = drawFromBox(rng, box) ?? drunk.relic; // 방금 넣었으니 박스가 비어있을 리 없음
-  drunk.belief = { role: "drunk" };
-  drunk.involvedTonight = true;
+  const drunks = villagers.filter((v) => v.relic === "drunk" && v.alive && !v.jailed);
+  for (const drunk of drunks) {
+    box.push(drunk.relic);
+    drunk.relic = drawFromBox(rng, box) ?? drunk.relic; // 방금 넣었으니 박스가 비어있을 리 없음
+    drunk.belief = { role: "drunk" };
+    drunk.involvedTonight = true;
+  }
 }
 
 // 제물/하수인의 사칭(claimRole)은 처음 그 역할이 됐을 때 한 번만 정해지고 안 바뀐다.
@@ -154,7 +193,7 @@ function refreshFakeBeliefs(rng, villagers, box) {
         const t = pick(rng, others);
         fake.targetId = t.id;
         fake.targetName = t.name;
-        fake.strange = rng() < 0.5;
+        fake.targetRelic = pick(rng, ALL_RELICS); // 근거 없이 지어낸 유물 — 진짜와 다를 수 있음
       }
     } else if (role === "troublemaker") {
       if (others.length >= 2) {
@@ -189,7 +228,7 @@ function buildPendingClaim(rng, speaker) {
   return {
     phase: "day",
     text: `${speaker.name}: "${line}"${mood}`,
-    meta: { kind: "claim", speakerId: speaker.id, claimedRole: role, targetId: belief.targetId, strange: belief.strange },
+    meta: { kind: "claim", speakerId: speaker.id, claimedRole: role, targetId: belief.targetId, targetRelic: belief.targetRelic },
   };
 }
 
@@ -206,7 +245,7 @@ function runNightPhase(state, rng) {
   const villagers = state.villagers.map((v) => ({ ...v, involvedTonight: false }));
   const box = [...state.box];
 
-  nightMason(villagers);
+  nightMason(rng, villagers);
   nightSeer(rng, villagers);
   nightRobber(rng, villagers);
   nightTroublemaker(rng, villagers);
@@ -221,7 +260,22 @@ function runNightPhase(state, rng) {
 
   const nightInvolvement = villagers.filter((v) => v.alive && v.involvedTonight).map((v) => v.id);
 
-  return { ...state, villagers, box, phase: "night", pendingClaims, nightInvolvement, log };
+  return { ...state, villagers, box, phase: "night", pendingClaims, nightInvolvement, nightListenedId: null, log };
+}
+
+// 밤에 딱 한 사람에게만 귀 기울일 수 있다 — 한 번 고르면 그날 밤은 그걸로 끝.
+// 그 사람이 오늘 밤 능력에 얽혔으면(행위자든 대상이든) 웅성거림이, 아니면 정적이 들린다.
+export function listenTo(state, id) {
+  if (state.phase !== "night" || state.nightListenedId) return state;
+  const target = state.villagers.find((v) => v.id === id);
+  if (!target) return state;
+
+  const involved = (state.nightInvolvement || []).includes(id);
+  return {
+    ...state,
+    nightListenedId: id,
+    log: [...state.log, { day: state.day, phase: "night", text: nightListenLine(target.name, involved) }],
+  };
 }
 
 // 밤에 정해둔 오늘의 증언을 실제로 공개한다 — "낮이 밝았다" 버튼에서 호출.
@@ -249,7 +303,7 @@ export function startRun(rng) {
 }
 
 export function jail(state, id) {
-  if (state.status !== "playing") return state;
+  if (state.status !== "playing" || state.phase !== "day") return state;
   const target = state.villagers.find((v) => v.id === id);
   if (!target || target.jailed) return state; // 이미 갇혀있으면 할 일 없음
 
@@ -271,7 +325,7 @@ export function jail(state, id) {
 }
 
 export function release(state, id) {
-  if (state.status !== "playing") return state;
+  if (state.status !== "playing" || state.phase !== "day") return state;
   const villagers = state.villagers.map((v) => (v.id === id ? { ...v, jailed: false } : v));
   return {
     ...state,
@@ -284,17 +338,32 @@ function buildRevealTable(villagers) {
   return villagers.map((v) => ({ id: v.id, name: v.name, startingRelic: v.startingRelic, endingRelic: v.relic }));
 }
 
+// 처형은 두 단계다: execute()는 "처형했다"만 보여주고 결과를 pendingResolution에
+// 감춰둔다. 플레이어가 "계속"을 누르면 continueAfterExecution()이 그걸 편다 —
+// 결과(성공/실패/연출)가 처형 그 자체와 동시에 보이지 않게 하기 위해서다.
 export function execute(state, id, rng) {
   const target = state.villagers.find((v) => v.id === id);
-  if (!target || state.status !== "playing") return state;
+  if (!target || state.status !== "playing" || state.phase !== "day") return state;
 
+  const deadVillagers = state.villagers.map((v) => (v.id === id ? { ...v, alive: false } : v));
+  const log = [...state.log, { day: state.day, phase: "day", text: `장로가 ${target.name}을(를) 제물로 처형했다.` }];
+
+  // resolveExecution이 이어 붙일 로그는 별도 복사본에 쓴다 — 지금 당장 보여줄 log와
+  // 섞이면 "처형했다"와 동시에 결과까지 새어 보이게 된다.
+  const pendingResolution = resolveExecution(state, target, [...log], deadVillagers, rng);
+
+  return { ...state, villagers: deadVillagers, log, phase: "executed", pendingResolution };
+}
+
+export function continueAfterExecution(state) {
+  if (state.phase !== "executed" || !state.pendingResolution) return state;
+  return state.pendingResolution;
+}
+
+function resolveExecution(state, target, log, villagers, rng) {
   const isRealSacrifice = target.relic === "sacrifice";
   const isMadnessDecoy = target.relic === "madness";
-
-  // 죽은 사람의 유물은 유물함으로 돌아가 계속 순환한다.
   let box = [...state.box, target.relic];
-  let villagers = state.villagers.map((v) => (v.id === id ? { ...v, alive: false } : v));
-  const log = [...state.log, { day: state.day, phase: "day", text: `장로가 ${target.name}을(를) 제물로 처형했다.` }];
 
   if (!isRealSacrifice && !isMadnessDecoy) {
     return {
@@ -376,6 +445,7 @@ export function stepGame(game) {
   let state = game.state;
   if (move.jailId) state = jail(state, move.jailId);
   state = execute(state, move.executeId, game.rng);
+  state = continueAfterExecution(state); // 봇은 "처형했다" 중간 화면 없이 바로 다음 상태로
   game.state = state;
 }
 

@@ -12,7 +12,7 @@ export const INTRO_TEXT = [
   "이레 안에 제물의 유물을 든 자와, 그것을 들여온 배신자를 찾아내라.",
 ];
 
-// RelicId: 'villager' | 'seer' | 'robber' | 'troublemaker' | 'drunk' | 'hunter' | 'tanner'
+// RelicId: 'villager' | 'seer' | 'robber' | 'troublemaker' | 'drunk' | 'madness'
 //        | 'mason' | 'minion' | 'sacrifice'
 export const RELIC_INFO = {
   villager: {
@@ -25,23 +25,20 @@ export const RELIC_INFO = {
   },
   robber: {
     name: "도둑의 유물",
-    description: "첫날 밤, 다른 사람 하나와 유물을 통째로 맞바꾼다. 그날부터 그 사람의 역할로 살아간다.",
+    description: "밤마다 다른 사람 하나와 유물을 통째로 맞바꾼다. 그날그날 훔친 역할로 살아간다.",
   },
   troublemaker: {
     name: "혼돈의 유물",
-    description: "첫날 밤, 자신을 뺀 다른 두 사람의 유물을 몰래 맞바꿔놓는다. 정작 자신의 유물은 그대로다.",
+    description: "밤마다 자신을 뺀 다른 두 사람의 유물을 몰래 맞바꿔놓는다. 정작 자신의 유물은 그대로다.",
   },
   drunk: {
     name: "몽롱한 유물",
-    description: "너무 취해서 매일 밤 자신이 무슨 유물인지조차 다르게 착각한다 — 낮의 주장이 밤마다 바뀐다.",
+    description: "밤마다 유물함 속 유물 하나와 자기 유물을 안 보고 바꾼다. 그래서 자신이 지금 뭘 가졌는지 스스로도 모른다.",
   },
-  hunter: {
-    name: "사냥꾼의 유물",
-    description: "억울하게 처형되면, 마지막 힘으로 감옥에 갇힌 자의 진짜 정체를 폭로하고 죽는다.",
-  },
-  tanner: {
-    name: "무두장이의 유물",
-    description: "이 짓거리가 지긋지긋해서 오히려 처형되기를 바란다. 처형되면 의식은 실패하지만 결말이 다르게 갈린다.",
+  madness: {
+    name: "광기의 유물",
+    description:
+      "처형되면 의식이 끝난 것처럼 보인다 — 하지만 그건 착각이다. 그 틈에 하수인이 다른 사람에게 제물의 유물을 하나 더 심어놓을 수 있다.",
   },
   mason: {
     name: "결계의 유물",
@@ -50,7 +47,7 @@ export const RELIC_INFO = {
   minion: {
     name: "그림자의 유물",
     description:
-      "의식에 제물의 유물을 몰래 들여온 배신자. 갇히지 않으면 밤마다 제물의 유물을 다른 이에게 옮길 수 있다.",
+      "의식에 제물의 유물을 몰래 들여온 배신자. 갇히지 않으면, 처형이 있을 때마다(진짜든 광기의 유물이든) 다른 사람에게 제물의 유물을 하나 더 심을 수 있다.",
   },
   sacrifice: {
     name: "제물의 유물",
@@ -59,13 +56,13 @@ export const RELIC_INFO = {
 };
 
 // 진짜 정체를 감출 때 사칭 대상이 될 수 있는 "진짜" 유물들 (제물/하수인 제외).
-export const HONEST_RELICS = ["villager", "seer", "robber", "troublemaker", "drunk", "hunter", "tanner", "mason"];
+export const HONEST_RELICS = ["villager", "seer", "robber", "troublemaker", "drunk", "madness", "mason"];
 
 // 유일 배정 유물의 정원 (초과 주장이 나오면 그중 최소 하나는 거짓 — 추궁 포인트).
 // villager는 정원 제한 없음(여럿이어도 정상)이라 여기 없음.
-export const ROLE_SLOTS = { seer: 1, robber: 1, troublemaker: 1, drunk: 1, hunter: 1, tanner: 1, mason: 2 };
+export const ROLE_SLOTS = { seer: 1, robber: 1, troublemaker: 1, drunk: 1, madness: 1, mason: 2 };
 
-// 12명 마을: 제물+하수인+원작 특수 역할 각 1(결계는 2) + 평범 2.
+// 11명 마을: 제물+하수인+원작 특수 역할 각 1(결계는 2) + 평범 2.
 export const DEFAULT_RELIC_LAYOUT = [
   "sacrifice",
   "minion",
@@ -73,13 +70,15 @@ export const DEFAULT_RELIC_LAYOUT = [
   "robber",
   "troublemaker",
   "drunk",
-  "hunter",
-  "tanner",
+  "madness",
   "mason",
   "mason",
   "villager",
   "villager",
 ];
+
+// 유물함(중앙 유물 풀)의 초기 여분 — 원작의 "인원수+3장" 관례를 따른다.
+export const BOX_SEED = ["villager", "villager", "villager"];
 
 export const VILLAGER_NAME_POOL = [
   "이삭", "마르가", "두빈", "소린", "헬가", "자카리", "오필", "펠라",
@@ -97,6 +96,8 @@ export const and = (word) => (hasBatchim(word) ? "과" : "와");
 export const copula = (word) => (hasBatchim(word) ? "이에요" : "예요");
 
 // 낮 증언: "나는 [유물]이다. [구체적 근거]." 형태로 통일해 추궁(대조/모순 찾기)이 가능하게 한다.
+// 도둑/문제아/취객은 이제 밤마다 실제로 유물이 바뀌므로, 그날그날 "현재" 유물을 가진
+// 사람이 그날의 증언을 한다 (전날까지 누가 그 유물이었는지는 중요하지 않다).
 // ctx: { targetName, targetName2, strange, partnerName }
 export const CLAIM_LINES = {
   villager: () => "나는 평범한 유물입니다. 특별히 본 것은 없어요.",
@@ -104,14 +105,13 @@ export const CLAIM_LINES = {
     `나는 예지의 유물입니다. 어젯밤 ${ctx.targetName}의 유물을 몰래 봤는데, ${
       ctx.strange ? "뭔가... 이상했어요." : "평범해 보였어요."
     }`,
-  robber: () => "나는 도둑의 유물입니다. 첫날 밤 누군가와 유물이 통째로 뒤바뀐 걸 알아챘어요.",
+  robber: () => "나는 도둑의 유물입니다. 어젯밤도 누군가와 유물이 통째로 뒤바뀐 걸 알아챘어요.",
   troublemaker: (ctx) =>
     ctx.targetName && ctx.targetName2
-      ? `나는 혼돈의 유물입니다. 첫날 밤 ${ctx.targetName}${and(ctx.targetName)} ${ctx.targetName2}의 유물을 몰래 바꿔놨어요.`
-      : "나는 혼돈의 유물입니다. 첫날 밤 누군가의 유물을 몰래 바꿔놨는데, 상대가 잘 기억나지 않아요.",
-  drunk: () => "나는 몽롱한 유물입니다. 사실 어젯밤 일이 하나도 기억나지 않아요.",
-  hunter: () => "나는 사냥꾼의 유물입니다. 저를 억울하게 건드리면 가만있지 않을 겁니다.",
-  tanner: () => "나는 무두장이의 유물입니다. 솔직히... 차라리 제가 처형됐으면 좋겠어요.",
+      ? `나는 혼돈의 유물입니다. 어젯밤 ${ctx.targetName}${and(ctx.targetName)} ${ctx.targetName2}의 유물을 몰래 바꿔놨어요.`
+      : "나는 혼돈의 유물입니다. 어젯밤도 누군가의 유물을 몰래 바꿔놨는데, 상대가 잘 기억나지 않아요.",
+  drunk: () => "나는 몽롱한 유물입니다. 사실 지금 제가 뭘 가졌는지도 몰라요.",
+  madness: () => "나는 광기의 유물입니다. 머릿속이 온통 뒤엉켜 있어요. 차라리... 절 데려가 주세요.",
   mason: (ctx) =>
     ctx.partnerName
       ? `나는 결계의 유물입니다. 제 짝은 ${ctx.partnerName}${copula(ctx.partnerName)}.`
@@ -133,14 +133,9 @@ export const NERVOUS_MOOD = [
   "말을 아끼며 주위를 살핀다.",
 ];
 
-// 사냥꾼이 처형될 때: 감옥에 갇힌 자가 있으면 그의 진짜 정체를 실제로 폭로한다(실질 효과).
-export function hunterRevealLine(jailedName, jailedRelicName) {
-  if (!jailedName) return "사냥꾼의 유물이 바닥에 떨어지며 낮게 울린다. 하지만 가리킬 자가 감옥에 없다.";
-  return `사냥꾼의 유물이 마지막 힘을 다해 감옥에 갇힌 ${jailedName}을(를) 가리킨다. 그의 진짜 정체는 [${jailedRelicName}]이었다.`;
-}
+// 광기의 유물을 처형했을 때: 실패처럼 보이지 않는다 — 오히려 성공한 것 같은 찜찜한 안도감.
+// (장로에게는 진짜와 구분되지 않는다. 하수인이 자유로우면 이 틈에 새 제물을 심는다.)
+export const MADNESS_EXECUTION_LINE =
+  "광기의 유물이 산산이 부서지며 낮은 웃음소리 같은 게 새어 나온다. 의식이 끝난 듯한 이상한 안도감이 마을을 감돈다...";
 
-// 무두장이가 처형될 때: 일반 오판과는 다른 결말(연출 + 별도 상태 'tanner')로 갈린다.
-export const TANNER_ENDING_TITLE = "무두장이의 소원";
-export const TANNER_ENDING_TEXT =
-  "무두장이는 오히려 옅은 미소를 지으며 눈을 감았다. 원했던 대로 되었다는 듯이. " +
-  "하지만 의식은 여전히 완성되지 못했다 — 진짜 제물은 어딘가에서 이 결말을 지켜보고 있다.";
+export const SACRIFICE_PLANTED_LINE = "어둠 속에서 하수인이 또 다른 이에게 제물의 유물을 몰래 심어놓았다...";

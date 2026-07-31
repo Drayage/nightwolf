@@ -80,14 +80,16 @@
   <!-- 게임 방법 모달: 처음부터 자리 마련 -->
   <dialog id="rules-modal">
     <h2 style="margin-top:0">게임 방법</h2>
-    <p>매일 밤 유물의 힘이 발휘되고, 낮에는 주민들의 증언을 듣습니다.</p>
-    <p>장로는 매일 반드시 한 명을 처형해야 합니다 — 그날의 진짜 제물의 유물 소지자를
-      정확히 맞혀야 하며, 틀리면 의식이 실패해 즉시 게임이 끝납니다.</p>
+    <p>밤마다 몇몇 유물은 실제로 주인이 바뀝니다. 낮에는 주민들이 지금 자신이 가진
+      유물을 두고 증언합니다 — 거짓일 수도 있습니다.</p>
+    <p>장로는 매일 반드시 한 명을 처형해야 합니다 — 그날 제물의 유물을 가진 사람을
+      맞혀야 하며, 아무 상관 없는 사람을 처형하면 의식이 실패해 즉시 게임이 끝납니다.</p>
     <p>의심되는 사람은 처형 대신 감옥에 가둘 수도 있습니다(선택, 되돌릴 수 있음).
-      의식에 제물의 유물을 몰래 들여온 배신자(하수인)를 가두지 못하면, 하수인이
-      밤마다 제물의 유물을 다른 사람에게 옮깁니다.</p>
-    <p>배신자를 가두고 그날의 진짜 제물을 처형하면 의식이 끝나고 승리합니다.
-      이레(7일) 안에 끝내지 못해도 실패합니다.</p>
+      의식에 제물의 유물을 몰래 들여온 배신자(하수인)를 가두지 못하면, 처형이 있을
+      때마다(심지어 성공한 것처럼 보이는 처형에도) 다른 사람에게 제물의 유물을
+      하나 더 심어놓습니다 — 제물은 한 명이 아닐 수 있습니다.</p>
+    <p>모든 제물의 유물 소지자를 처형하고 배신자를 가둔 상태로 만들면 의식이 끝나고
+      승리합니다. 이레(7일) 안에 끝내지 못해도 실패합니다.</p>
     <button onclick="this.closest('dialog').close()">닫기</button>
   </dialog>
 
@@ -99,10 +101,10 @@
   </dialog>
 
   <script type="module">
-    import { APP_VERSION } from "./js/app-config.js?v=20260731-4";
-    import { mountVersionBadge, mountErrorOverlay } from "./js/devtools.js?v=20260731-4";
-    import { initAudio } from "./js/audio.js?v=20260731-4";
-    import "./js/ui.js?v=20260731-4";
+    import { APP_VERSION } from "./js/app-config.js?v=20260731-5";
+    import { mountVersionBadge, mountErrorOverlay } from "./js/devtools.js?v=20260731-5";
+    import { initAudio } from "./js/audio.js?v=20260731-5";
+    import "./js/ui.js?v=20260731-5";
 
     mountErrorOverlay(); // 가장 먼저 — 초기화 에러도 잡히게
     mountVersionBadge();

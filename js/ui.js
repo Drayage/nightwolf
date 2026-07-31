@@ -1,6 +1,6 @@
 // 렌더 — 타이틀 / 하루 진행 / 종료 화면. DOM 전용, 게임 규칙은 engine.js에 있음.
 import { startRun, jail, release, execute } from "./engine.js";
-import { RELIC_INFO, TITLE, INTRO_TEXT, TANNER_ENDING_TITLE } from "./data/relics.js";
+import { RELIC_INFO, TITLE, INTRO_TEXT } from "./data/relics.js";
 import { saveGame, loadGame, clearGame, saveMarks, loadMarks, clearMarks } from "./storage.js";
 import { playSfx } from "./audio.js";
 import { RITUAL } from "./palettes.js";
@@ -96,12 +96,10 @@ function renderEnd() {
 
   const headingByStatus = {
     won: "의식이 완성되었다",
-    tanner: TANNER_ENDING_TITLE,
     lost: "의식은 실패했다",
   };
   const bodyByStatus = {
     won: `${state.day}일 만에 붉은달의 저주를 막아냈다.`,
-    tanner: state.lossReason,
     lost: state.lossReason,
   };
 

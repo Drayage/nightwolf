@@ -129,6 +129,23 @@ export function createVillage(rng) {
 // 위험한 줄 앎, 재확인할 방법이 없어서), 반대로 도둑/문제아한테 그 유물을 떠넘겨받아
 // "지금" 진짜 위험해진 사람은 자기가 위험한 줄 전혀 몰라 태연히 진실만 말한다
 // (isThreat() 참고 — v.relic이 아니라 v.startingRelic으로 판정).
+// 평범/광기의 유물은 아무 능력도 없어서 숨길 것도, 재확인이 필요한 것도 없다 —
+// 매일 밤 시작하기 전에 자기 유물을 보고 들어간다. 그래서 도둑/문제아한테 다른
+// 능동 유물(예지/도둑/문제아/취객)을 뺏겨서 평범/광기가 된 사람은 바로 다음 날
+// 부터 그 사실 그대로("저는 평범한 유물이에요") 말한다 — belief가 며칠씩 묵은
+// 채로 남지 않는다(제물/하수인만 예외 — 그건 원래 그 유물을 가진 사람만 아는
+// 저주라 이 자기확인 대상이 아니다). 이 함수를 캐스케이드 맨 앞에서 돌리는 이유는
+// 그날 밤 실제로 능동 유물을 얻어 행동하게 되면(예: 도둑한테 뺏겨 결계가 된 경우)
+// 뒤이은 night*가 그 belief를 자연스럽게 다시 덮어써야 하기 때문이다.
+function syncPassiveBelief(villagers) {
+  for (const v of villagers) {
+    if (!v.alive || v.jailed) continue;
+    if (v.relic === "villager" || v.relic === "madness") {
+      v.belief = { role: v.relic };
+    }
+  }
+}
+
 function nightMason(villagers) {
   const masons = villagers.filter((v) => v.relic === "mason" && v.alive && !v.jailed);
   for (let i = 0; i + 1 < masons.length; i += 2) {
@@ -290,6 +307,9 @@ function runNightPhase(state, rng) {
   const villagers = state.villagers.map((v) => ({ ...v, involvedTonight: false }));
   const box = [...state.box];
 
+  // 능동 유물 캐스케이드보다 먼저 — 아래 night*가 그날 밤 실제로 행동하게 된 사람의
+  // belief를 자연스럽게 덮어쓸 수 있도록.
+  syncPassiveBelief(villagers);
   nightMason(villagers);
   nightSeer(rng, villagers, state.day);
   nightRobber(rng, villagers, state.day);

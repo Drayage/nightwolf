@@ -118,6 +118,7 @@ export const CLAIM_LINES = {
     belief.partnerName
       ? `저는 결계의 유물이에요. 제 짝은 ${belief.partnerName}${copula(belief.partnerName)}.`
       : "저는 결계의 유물이에요. 짝이 있었을 텐데, 이제 소식을 알 수 없어요.",
+  jailed: () => "어젯밤 감옥에 갇혀 있어서 아무것도 할 수 없었어요.",
 };
 
 // 오염된(제물/하수인) 화자가 주장 뒤에 붙이는 짧은 태도 — 공포/과잉 확신을 드러낸다.

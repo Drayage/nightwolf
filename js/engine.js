@@ -135,7 +135,8 @@ function nightMason(villagers) {
 function nightSeer(rng, villagers) {
   const seers = villagers.filter((v) => v.relic === "seer" && v.alive && !v.jailed);
   for (const seer of seers) {
-    const others = villagers.filter((v) => v.alive && v.id !== seer.id);
+    // 갇힌 사람은 격리돼 있어 남의 능력의 대상도 될 수 없다 — 훔쳐볼 수도, 훔쳐갈 수도 없음.
+    const others = villagers.filter((v) => v.alive && !v.jailed && v.id !== seer.id);
     if (others.length === 0) continue;
     const target = pick(rng, others);
     seer.belief = { role: "seer", targetId: target.id, targetName: target.name, targetRelic: target.relic };
@@ -147,7 +148,8 @@ function nightSeer(rng, villagers) {
 function nightRobber(rng, villagers) {
   const robbers = villagers.filter((v) => v.relic === "robber" && v.alive && !v.jailed);
   for (const robber of robbers) {
-    const others = villagers.filter((v) => v.alive && v.id !== robber.id);
+    // 갇힌 사람은 격리돼 있어 남의 능력의 대상도 될 수 없다 — 훔쳐볼 수도, 훔쳐갈 수도 없음.
+    const others = villagers.filter((v) => v.alive && !v.jailed && v.id !== robber.id);
     if (others.length === 0) continue;
     const target = pick(rng, others);
     [robber.relic, target.relic] = [target.relic, robber.relic];
@@ -162,7 +164,8 @@ function nightRobber(rng, villagers) {
 function nightTroublemaker(rng, villagers) {
   const troublemakers = villagers.filter((v) => v.relic === "troublemaker" && v.alive && !v.jailed);
   for (const troublemaker of troublemakers) {
-    const others = villagers.filter((v) => v.alive && v.id !== troublemaker.id);
+    // 갇힌 사람은 격리돼 있어 남의 능력의 대상도 될 수 없다 — 훔쳐볼 수도, 훔쳐갈 수도 없음.
+    const others = villagers.filter((v) => v.alive && !v.jailed && v.id !== troublemaker.id);
     if (others.length < 2) continue;
     const [a, b] = shuffle(rng, others);
     [a.relic, b.relic] = [b.relic, a.relic];
@@ -226,9 +229,11 @@ function isThreat(v) {
 
 // 낮 증언 한 줄 — belief(또는 사칭이면 fakeBelief)를 그대로 문장으로 옮긴다.
 // 같은 유물을 주장하는 사람이 정원(ROLE_SLOTS)보다 많으면 그 자체가 추궁 단서.
+// 갇혀 있던 사람은 애초에 어젯밤 아무 능력도 못 썼으니(사칭이든 진짜든) belief를
+// 참고할 필요 없이 갇혀 있었다는 사실 그대로만 말한다.
 function buildPendingClaim(rng, speaker) {
-  const threat = isThreat(speaker);
-  const belief = threat ? speaker.fakeBelief : speaker.belief;
+  const threat = !speaker.jailed && isThreat(speaker);
+  const belief = speaker.jailed ? { role: "jailed" } : threat ? speaker.fakeBelief : speaker.belief;
   if (!belief) return null;
 
   const role = belief.role;

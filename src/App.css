@@ -1,0 +1,140 @@
+.screen {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 32px 20px 64px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.title-screen,
+.end-screen {
+  text-align: center;
+  align-items: center;
+}
+
+.title-screen h1,
+.end-screen h1 {
+  color: #c62828;
+  letter-spacing: 0.05em;
+}
+
+.intro-line {
+  color: #cfcfcf;
+  max-width: 480px;
+  line-height: 1.6;
+}
+
+.primary-button {
+  margin-top: 16px;
+  padding: 12px 28px;
+  background: #7a1f1f;
+  color: #fff;
+  border: 1px solid #c62828;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 16px;
+}
+
+.primary-button:hover {
+  background: #c62828;
+}
+
+.run-header h2 {
+  color: #c62828;
+  text-align: center;
+}
+
+.log {
+  background: #16141a;
+  border: 1px solid #2c2732;
+  border-radius: 8px;
+  padding: 16px;
+  min-height: 80px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.log-line {
+  margin: 0;
+  color: #cfcfcf;
+  line-height: 1.5;
+}
+
+.log-line.night {
+  color: #8b8b9a;
+  font-style: italic;
+}
+
+.villagers {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+.villager-card {
+  background: #1c1a22;
+  border: 1px solid #322d3a;
+  border-radius: 8px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.villager-card.jailed {
+  border-color: #5a4a1f;
+  background: #221f16;
+}
+
+.villager-name {
+  font-weight: 600;
+}
+
+.villager-status {
+  font-size: 12px;
+  color: #8b8b9a;
+}
+
+.villager-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.villager-actions button {
+  flex: 1;
+  padding: 6px 4px;
+  font-size: 12px;
+  border-radius: 4px;
+  border: 1px solid #3a3542;
+  background: #26222c;
+  color: #eee;
+  cursor: pointer;
+}
+
+.villager-actions .danger-button {
+  border-color: #7a1f1f;
+  color: #ff8080;
+}
+
+.villager-actions .danger-button:hover {
+  background: #7a1f1f;
+  color: #fff;
+}
+
+.relic-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+  font-size: 11px;
+  color: #6f6a7a;
+}
+
+.relic-hint {
+  border: 1px dashed #3a3542;
+  border-radius: 4px;
+  padding: 2px 6px;
+  cursor: help;
+}

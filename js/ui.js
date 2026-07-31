@@ -159,6 +159,7 @@ function renderNight() {
         onClick: () => {
           playSfx(RITUAL, "confirm");
           state = revealDay(state);
+          resetMarks();
           persist();
           render();
         },
@@ -173,8 +174,8 @@ function renderExecuted() {
   gameArea.innerHTML = "";
   actionBar.innerHTML = "";
 
-  const todayLog = state.log.filter((e) => e.day === state.day && e.phase === "day");
-  const logBox = el("section", { class: "log" }, todayLog.map((e) => el("p", { class: "log-line day" }, e.text)));
+  const executionLog = state.log.filter((e) => e.day === state.day && e.meta?.kind === "execution");
+  const logBox = el("section", { class: "log" }, executionLog.map((e) => el("p", { class: "log-line day" }, e.text)));
 
   gameArea.appendChild(el("div", { class: "screen run-screen" }, [el("h2", { class: "run-header" }, "..."), logBox]));
 

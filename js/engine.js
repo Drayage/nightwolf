@@ -114,8 +114,11 @@ export function createVillage(rng) {
 // 그날 밤 시작 시점에 그 유물을 쥔 사람 전원이 각자 자기 몫의 능력을 쓴다(한 명뿐이라도
 // 동작은 같다). 결계는 항상 짝수로 나오도록 설계돼 있지만, 감옥에 갇혀 이번 밤엔
 // 제외되는 경우 홀수가 될 수 있어 마지막 한 명은 짝 없이 남는다.
-function nightMason(rng, villagers) {
-  const masons = shuffle(rng, villagers.filter((v) => v.relic === "mason" && v.alive && !v.jailed));
+// 같은 유물을 여럿이 쥐고 있을 때 "누가 먼저 능력을 썼는가"는 villagers 배열의 순서
+// (=낮 증언·주민 카드가 뜨는 순서, 절대 재배열되지 않음)를 그대로 따른다 — 그래서
+// 결계도 무작위로 짝짓지 않고 그 순서대로 앞에서부터 둘씩 묶는다.
+function nightMason(villagers) {
+  const masons = villagers.filter((v) => v.relic === "mason" && v.alive && !v.jailed);
   for (let i = 0; i + 1 < masons.length; i += 2) {
     const a = masons[i];
     const b = masons[i + 1];
@@ -254,7 +257,7 @@ function runNightPhase(state, rng) {
   const villagers = state.villagers.map((v) => ({ ...v, involvedTonight: false }));
   const box = [...state.box];
 
-  nightMason(rng, villagers);
+  nightMason(villagers);
   nightSeer(rng, villagers);
   nightRobber(rng, villagers);
   nightTroublemaker(rng, villagers);
@@ -355,7 +358,10 @@ export function execute(state, id, rng) {
   if (!target || state.status !== "playing" || state.phase !== "day") return state;
 
   const deadVillagers = state.villagers.map((v) => (v.id === id ? { ...v, alive: false } : v));
-  const log = [...state.log, { day: state.day, phase: "day", text: `장로가 ${target.name}을(를) 제물로 처형했다.` }];
+  const log = [
+    ...state.log,
+    { day: state.day, phase: "day", text: `장로가 ${target.name}을(를) 제물로 처형했다.`, meta: { kind: "execution" } },
+  ];
 
   // resolveExecution이 이어 붙일 로그는 별도 복사본에 쓴다 — 지금 당장 보여줄 log와
   // 섞이면 "처형했다"와 동시에 결과까지 새어 보이게 된다.

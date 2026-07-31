@@ -120,6 +120,12 @@ export function createVillage(rng) {
 // 밤에 귀 기울여 얽힘 여부를 듣는 건 "카드가 실제로 움직였는가"(대상이 됐거나 자기
 // 유물이 바뀜) 기준이다 — 결계는 서로 정체를 아는 것뿐, 아무 유물도 움직이지 않으니
 // 소리가 안 남(involvedTonight을 아예 안 켠다).
+// 제물/하수인은 도둑·문제아의 대상 후보에서 아예 빠진다(취객의 유물함행도 마찬가지,
+// resolveExecution 참고) — 두 유물은 "들자마자 안다"는 저주라서 거짓말을 하는 건데,
+// 원래부터 그 유물을 쥔 사람만 그 저주를 알지, 무작위 카드 셔플로 우연히 넘겨받은
+// 사람은 자기가 뭘 들고 있는지조차 모른다(다른 유물과 똑같이). 그래서 두 유물은
+// 처음 정해진 사람에게 계속 고정돼야 앞뒤가 맞는다 — 유일한 예외는 하수인이
+// 의도적으로 새 제물을 심는 것뿐(그건 저주를 아는 하수인이 벌이는 일이라 다름).
 function nightMason(villagers) {
   const masons = villagers.filter((v) => v.relic === "mason" && v.alive && !v.jailed);
   for (let i = 0; i + 1 < masons.length; i += 2) {
@@ -150,7 +156,12 @@ function nightRobber(rng, villagers) {
   const robbers = villagers.filter((v) => v.relic === "robber" && v.alive && !v.jailed);
   for (const robber of robbers) {
     // 갇힌 사람은 격리돼 있어 남의 능력의 대상도 될 수 없다 — 훔쳐볼 수도, 훔쳐갈 수도 없음.
-    const others = villagers.filter((v) => v.alive && !v.jailed && v.id !== robber.id);
+    // 제물/하수인은 도둑질 대상에서 제외 — 그 유물은 처음부터 정해진 사람에게 계속
+    // 있어야 한다. 아무 영문도 모른 채 유물이 넘어온 사람이 갑자기 겁먹고 거짓말할
+    // 동기는 없다(들자마자 안다는 건 원래 그 유물을 가진 사람에게만 해당하는 저주).
+    const others = villagers.filter(
+      (v) => v.alive && !v.jailed && v.id !== robber.id && v.relic !== "sacrifice" && v.relic !== "minion"
+    );
     if (others.length === 0) continue;
     const target = pick(rng, others);
     [robber.relic, target.relic] = [target.relic, robber.relic];
@@ -167,7 +178,11 @@ function nightTroublemaker(rng, villagers) {
   const troublemakers = villagers.filter((v) => v.relic === "troublemaker" && v.alive && !v.jailed);
   for (const troublemaker of troublemakers) {
     // 갇힌 사람은 격리돼 있어 남의 능력의 대상도 될 수 없다 — 훔쳐볼 수도, 훔쳐갈 수도 없음.
-    const others = villagers.filter((v) => v.alive && !v.jailed && v.id !== troublemaker.id);
+    // 제물/하수인은 대상에서 제외 — 그 유물은 처음부터 정해진 사람에게 계속 있어야
+    // 한다(로버와 같은 이유).
+    const others = villagers.filter(
+      (v) => v.alive && !v.jailed && v.id !== troublemaker.id && v.relic !== "sacrifice" && v.relic !== "minion"
+    );
     if (others.length < 2) continue;
     const [a, b] = shuffle(rng, others);
     [a.relic, b.relic] = [b.relic, a.relic];
@@ -385,7 +400,10 @@ export function continueAfterExecution(state) {
 function resolveExecution(state, target, log, villagers, rng) {
   const isRealSacrifice = target.relic === "sacrifice";
   const isMadnessDecoy = target.relic === "madness";
-  let box = [...state.box, target.relic];
+  // 제물/하수인 유물은 죽어도 유물함으로 돌아가지 않는다 — 도둑/문제아 대상에서 뺀 것과
+  // 같은 이유: 유물함에 섞였다가 취객이 무작위로 뽑으면 아무 동기도 없는 사람이 새
+  // 제물이 돼버린다. 제물이 여러 명 생기는 건 오직 하수인의 의도적인 "심기"뿐이어야 한다.
+  let box = isRealSacrifice || target.relic === "minion" ? [...state.box] : [...state.box, target.relic];
 
   if (!isRealSacrifice && !isMadnessDecoy) {
     return {

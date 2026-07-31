@@ -67,7 +67,10 @@ function weightedPick(rng, weightedOptions) {
 
 // 마을 구성을 무작위로 정한다 — 제물/하수인만 1명씩 고정, 결계는 항상 짝수(0/2/4,
 // 2가 가장 흔함), 나머지 칸은 예지/도둑/문제아/취객/광기/평범 중에서 칸마다 독립적으로
-// 뽑는다. 그래서 어떤 유물이 아예 안 나올 수도, 여러 명 겹칠 수도 있다.
+// 뽑는다. 그래서 어떤 유물이 아예 안 나올 수도, 여러 명 겹칠 수도 있다 — 다만 같은
+// 유물이 이미 여러 번 나왔으면 그다음 칸에서 또 나올 확률을 점점 낮춘다(가중치
+// 1/(이미 나온 횟수+1)) — 안 그러면 가끔 한쪽으로 확 쏠려서(예: 예지 5명) 재미가
+// 없어진다. 완전히 막지는 않으므로 여전히 몰릴 수는 있다.
 function generateRelicLayout(rng, size) {
   const layout = ["sacrifice", "minion"];
   let remaining = size - layout.length;
@@ -76,7 +79,13 @@ function generateRelicLayout(rng, size) {
   for (let i = 0; i < masonCount; i++) layout.push("mason");
   remaining -= masonCount;
 
-  for (let i = 0; i < remaining; i++) layout.push(pick(rng, DUPLICATABLE_RELICS));
+  const counts = {};
+  for (let i = 0; i < remaining; i++) {
+    const options = DUPLICATABLE_RELICS.map((r) => [r, 1 / ((counts[r] ?? 0) + 1)]);
+    const picked = weightedPick(rng, options);
+    counts[picked] = (counts[picked] ?? 0) + 1;
+    layout.push(picked);
+  }
 
   return shuffle(rng, layout);
 }

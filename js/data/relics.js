@@ -93,26 +93,32 @@ function hasBatchim(word) {
 export const and = (word) => (hasBatchim(word) ? "과" : "와");
 export const copula = (word) => (hasBatchim(word) ? "이에요" : "예요");
 
-// 낮 증언: 유물은 주머니 속에 있어 아무도 "지금" 자기가 뭔지 모른다. 다들 어젯밤
-// 자기가 한 행동(혹은 계속 같은 자기 인식)을 말할 뿐이다 — 그래서 말하는 유물과
-// 지금 실제로 들고 있는 유물이 다를 수 있다. 능동적으로 뭔가를 "한" 유물(예지/도둑/
-// 문제아/취객)은 과거형으로, 그냥 "그런 사람"인 유물(평범/결계/광기)은 현재형으로 쓴다.
-// belief: { role, targetName, targetName2, targetRelic, partnerName, swappedWithName }
+// 낮 증언: 유물은 주머니 속에 있어 아무도 "지금" 자기가 뭔지 모른다. 다들 자기가
+// 한 행동(혹은 계속 같은 자기 인식)을 말할 뿐이다 — 그래서 말하는 유물과 지금 실제로
+// 들고 있는 유물이 다를 수 있다. 능동적으로 뭔가를 "한" 유물(예지/도둑/문제아/취객)은
+// 과거형으로, 그냥 "그런 사람"인 유물(평범/결계/광기)은 현재형으로 쓴다.
+// belief: { role, targetName, targetName2, targetRelic, partnerName, swappedWithName, day }
+// belief.day가 오늘과 다르면 며칠 전에 굳어버린 오래된 belief라는 뜻(도둑/문제아한테
+// 유물을 뺏긴 뒤로 그 능력을 다시 쓴 적이 없는 경우) — "어젯밤"이라고 하면 그날 밤
+// 다른 증거(예: 예지가 정확히 지금 유물을 봤다는 진술)와 앞뒤가 안 맞으므로 구분해서
+// 말한다.
+const recency = (belief, day) => (belief.day === day ? "어젯밤" : "예전에");
+
 export const CLAIM_LINES = {
   villager: () => "저는 평범한 유물이에요. 특별히 본 건 없어요.",
-  seer: (belief) =>
-    `어젯밤 예지의 유물을 썼어요. ${belief.targetName}의 유물을 몰래 봤는데, ${
+  seer: (belief, day) =>
+    `${recency(belief, day)} 예지의 유물을 썼어요. ${belief.targetName}의 유물을 몰래 봤는데, ${
       RELIC_INFO[belief.targetRelic]?.name ?? "알 수 없는 유물"
     }이었어요.`,
-  robber: (belief) =>
+  robber: (belief, day) =>
     belief.swappedWithName
-      ? `어젯밤 도둑의 유물을 썼어요. ${belief.swappedWithName}${and(belief.swappedWithName)} 유물을 통째로 바꿨는데, 지금 제가 뭘 가졌는지는 저도 몰라요.`
-      : "어젯밤 도둑의 유물을 썼는데, 상대가 잘 기억나지 않아요. 지금 제가 뭘 가졌는지도 몰라요.",
-  troublemaker: (belief) =>
+      ? `${recency(belief, day)} 도둑의 유물을 썼어요. ${belief.swappedWithName}${and(belief.swappedWithName)} 유물을 통째로 바꿨는데, 지금 제가 뭘 가졌는지는 저도 몰라요.`
+      : `${recency(belief, day)} 도둑의 유물을 썼는데, 상대가 잘 기억나지 않아요. 지금 제가 뭘 가졌는지도 몰라요.`,
+  troublemaker: (belief, day) =>
     belief.targetName && belief.targetName2
-      ? `어젯밤 혼돈의 유물을 썼어요. ${belief.targetName}${and(belief.targetName)} ${belief.targetName2}의 유물을 몰래 바꿔놨어요.`
-      : "어젯밤 혼돈의 유물을 썼는데, 누구 걸 바꿨는지 잘 기억나지 않아요.",
-  drunk: () => "어젯밤 몽롱한 유물을 썼어요. 유물함이랑 뭔가 바꿨는데, 뭘 가져왔는지 기억이 안 나요.",
+      ? `${recency(belief, day)} 혼돈의 유물을 썼어요. ${belief.targetName}${and(belief.targetName)} ${belief.targetName2}의 유물을 몰래 바꿔놨어요.`
+      : `${recency(belief, day)} 혼돈의 유물을 썼는데, 누구 걸 바꿨는지 잘 기억나지 않아요.`,
+  drunk: (belief, day) => `${recency(belief, day)} 몽롱한 유물을 썼어요. 유물함이랑 뭔가 바꿨는데, 뭘 가져왔는지 기억이 안 나요.`,
   madness: () => "저는 광기의 유물이에요. 머릿속이 온통 뒤엉켜 있어요. 차라리... 절 데려가 주세요.",
   mason: (belief) =>
     belief.partnerName

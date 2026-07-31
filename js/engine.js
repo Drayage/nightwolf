@@ -142,20 +142,22 @@ function nightMason(villagers) {
   }
 }
 
-function nightSeer(rng, villagers) {
+function nightSeer(rng, villagers, day) {
   const seers = villagers.filter((v) => v.relic === "seer" && v.alive && !v.jailed);
   for (const seer of seers) {
     // 갇힌 사람은 격리돼 있어 남의 능력의 대상도 될 수 없다 — 훔쳐볼 수도, 훔쳐갈 수도 없음.
     const others = villagers.filter((v) => v.alive && !v.jailed && v.id !== seer.id);
     if (others.length === 0) continue;
     const target = pick(rng, others);
-    seer.belief = { role: "seer", targetId: target.id, targetName: target.name, targetRelic: target.relic };
+    // day를 belief에 찍어둔다 — 이 belief가 "어젯밤" 일어난 일인지, 며칠 전에 굳어버린
+    // 오래된 belief인지 낮 증언(CLAIM_LINES)이 구분해서 말할 수 있게 하기 위해서다.
+    seer.belief = { role: "seer", targetId: target.id, targetName: target.name, targetRelic: target.relic, day };
     // 예지 자신은 유물도 안 바뀌고 대상도 아니다 — 얽힘은 "보인" 쪽만.
     target.involvedTonight = true;
   }
 }
 
-function nightRobber(rng, villagers) {
+function nightRobber(rng, villagers, day) {
   const robbers = villagers.filter((v) => v.relic === "robber" && v.alive && !v.jailed);
   for (const robber of robbers) {
     // 갇힌 사람은 격리돼 있어 남의 능력의 대상도 될 수 없다 — 훔쳐볼 수도, 훔쳐갈 수도 없음.
@@ -168,14 +170,14 @@ function nightRobber(rng, villagers) {
     [robber.relic, target.relic] = [target.relic, robber.relic];
     // robber는 누구와 바꿨는지는 알지만(주머니 밖 행동), 뭘 받았는지는 안을 안 봐서 모른다.
     // target은 자기 유물이 바뀐 줄도 모른다 — belief 그대로 둔다.
-    robber.belief = { role: "robber", swappedWithName: target.name };
+    robber.belief = { role: "robber", swappedWithName: target.name, day };
     // 도둑은 자기 유물도, 대상의 유물도 둘 다 바뀐다 — 그래서 둘 다 얽힘.
     robber.involvedTonight = true;
     target.involvedTonight = true;
   }
 }
 
-function nightTroublemaker(rng, villagers) {
+function nightTroublemaker(rng, villagers, day) {
   const troublemakers = villagers.filter((v) => v.relic === "troublemaker" && v.alive && !v.jailed);
   for (const troublemaker of troublemakers) {
     // 갇힌 사람은 격리돼 있어 남의 능력의 대상도 될 수 없다 — 훔쳐볼 수도, 훔쳐갈 수도 없음.
@@ -183,19 +185,19 @@ function nightTroublemaker(rng, villagers) {
     if (others.length < 2) continue;
     const [a, b] = shuffle(rng, others);
     [a.relic, b.relic] = [b.relic, a.relic];
-    troublemaker.belief = { role: "troublemaker", targetName: a.name, targetName2: b.name };
+    troublemaker.belief = { role: "troublemaker", targetName: a.name, targetName2: b.name, day };
     // 문제아 자신의 유물은 그대로다 — 유물이 실제로 바뀐 a, b만 얽힘.
     a.involvedTonight = true;
     b.involvedTonight = true;
   }
 }
 
-function nightDrunk(rng, villagers, box) {
+function nightDrunk(rng, villagers, box, day) {
   const drunks = villagers.filter((v) => v.relic === "drunk" && v.alive && !v.jailed);
   for (const drunk of drunks) {
     box.push(drunk.relic);
     drunk.relic = drawFromBox(rng, box) ?? drunk.relic; // 방금 넣었으니 박스가 비어있을 리 없음
-    drunk.belief = { role: "drunk" };
+    drunk.belief = { role: "drunk", day };
     drunk.involvedTonight = true;
   }
 }
@@ -209,7 +211,7 @@ function nightDrunk(rng, villagers, box) {
 // 도둑/문제아한테 그 유물을 뺏겨도 본인은 여전히 그런 줄 알고 계속 거짓말한다.
 // 반대로 지금 실제로 그 유물을 들고 있어도 원래 그게 아니었던 사람은 자기가 위험한
 // 줄 전혀 모른 채(belief 그대로) 태연히 진실만 말한다 — isThreat() 참고.
-function refreshFakeBeliefs(rng, villagers, box) {
+function refreshFakeBeliefs(rng, villagers, box, day) {
   const honestPresent = [...new Set(villagers.map((v) => v.relic))].filter((r) => HONEST_RELICS.includes(r));
   const villagerPool = honestPresent.length > 0 ? honestPresent : ["villager"];
   const boxPool = [...new Set(box)].filter((r) => HONEST_RELICS.includes(r));
@@ -221,7 +223,8 @@ function refreshFakeBeliefs(rng, villagers, box) {
 
     const role = v.claimRole;
     const others = villagers.filter((o) => o.alive && o.id !== v.id);
-    const fake = { role };
+    // 사칭은 매일 새로 지어내므로 항상 "어젯밤" 방금 일어난 일처럼 말한다(day를 오늘로 찍음).
+    const fake = { role, day };
     if (role === "seer") {
       if (others.length > 0) {
         const t = pick(rng, others);
@@ -252,13 +255,17 @@ function isThreat(v) {
 // 같은 유물을 주장하는 사람이 정원(ROLE_SLOTS)보다 많으면 그 자체가 추궁 단서.
 // 갇혀 있던 사람은 애초에 어젯밤 아무 능력도 못 썼으니(사칭이든 진짜든) belief를
 // 참고할 필요 없이 갇혀 있었다는 사실 그대로만 말한다.
-function buildPendingClaim(rng, speaker) {
+function buildPendingClaim(rng, speaker, day) {
   const threat = !speaker.jailed && isThreat(speaker);
   const belief = speaker.jailed ? { role: "jailed" } : threat ? speaker.fakeBelief : speaker.belief;
   if (!belief) return null;
 
   const role = belief.role;
-  const line = (CLAIM_LINES[role] || CLAIM_LINES.villager)(belief);
+  // belief.day가 오늘(day)과 다르면 며칠 전에 굳어버린 오래된 belief라는 뜻 — 도둑/문제아
+  // 한테 유물을 뺏겨서 그 뒤로 한 번도 다시 행동한 적이 없는 경우다(예: 그날 밤 예지가
+  // 정확히 지금 유물을 봤다고 말하는데, 정작 본인은 며칠 전 얘기를 "어젯밤"이라고
+  // 하면 앞뒤가 안 맞는다 — CLAIM_LINES가 day 차이를 보고 표현을 다르게 골라준다).
+  const line = (CLAIM_LINES[role] || CLAIM_LINES.villager)(belief, day);
   let mood = "";
   if (threat) mood = " " + pick(rng, CORRUPTED_MOOD);
   else if (role === "villager" && rng() < 0.3) mood = " " + pick(rng, NERVOUS_MOOD);
@@ -284,15 +291,15 @@ function runNightPhase(state, rng) {
   const box = [...state.box];
 
   nightMason(villagers);
-  nightSeer(rng, villagers);
-  nightRobber(rng, villagers);
-  nightTroublemaker(rng, villagers);
-  nightDrunk(rng, villagers, box);
-  refreshFakeBeliefs(rng, villagers, box);
+  nightSeer(rng, villagers, state.day);
+  nightRobber(rng, villagers, state.day);
+  nightTroublemaker(rng, villagers, state.day);
+  nightDrunk(rng, villagers, box, state.day);
+  refreshFakeBeliefs(rng, villagers, box, state.day);
 
   const pendingClaims = [];
   for (const speaker of villagers.filter((v) => v.alive)) {
-    const claim = buildPendingClaim(rng, speaker);
+    const claim = buildPendingClaim(rng, speaker, state.day);
     if (claim) pendingClaims.push({ day: state.day, ...claim });
   }
 

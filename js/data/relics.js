@@ -105,7 +105,7 @@ export const CLAIM_LINES = {
     `나는 예지의 유물입니다. 어젯밤 ${ctx.targetName}의 유물을 몰래 봤는데, ${
       ctx.strange ? "뭔가... 이상했어요." : "평범해 보였어요."
     }`,
-  robber: () => "나는 도둑의 유물입니다. 어젯밤도 누군가와 유물이 통째로 뒤바뀐 걸 알아챘어요.",
+  robber: () => "나는 도둑의 유물입니다. 그런데 이게 어쩌다 제게 왔는지는 저도 잘 모르겠어요.",
   troublemaker: (ctx) =>
     ctx.targetName && ctx.targetName2
       ? `나는 혼돈의 유물입니다. 어젯밤 ${ctx.targetName}${and(ctx.targetName)} ${ctx.targetName2}의 유물을 몰래 바꿔놨어요.`

@@ -47,6 +47,24 @@ function drawFromBox(rng, box) {
   return box.splice(idx, 1)[0];
 }
 
+// 제물/하수인의 "무슨 유물이라고 사칭할지"를 정한다(한 번 정하면 안 바뀜 — 거짓말도
+// 일관성이 있어야 추궁이 성립한다). 이미 claimRole이 있는 사람은 건너뛴다 — 도둑의
+// 유물에 휘말려 새로 제물/하수인이 된 사람만 이 시점에 처음 커버 스토리를 얻는다.
+// 제물은 살아있는 사람들 중 실제로 존재하는 "진짜" 유물을 사칭하고(정원 초과 추궁이
+// 걸리기 쉬움), 하수인은 그보다 훨씬 안일하게 유물함 안을 대충 훑어보고 그중 하나를
+// 자기 것인 척한다. villagers를 제자리에서 바꾸므로 새로 복제된 배열에만 호출할 것.
+function ensureClaimRoles(rng, villagers, box) {
+  const honestPresent = [...new Set(villagers.map((v) => v.relic))].filter((r) => HONEST_RELICS.includes(r));
+  const villagerPool = honestPresent.length > 0 ? honestPresent : ["villager"];
+  const boxPool = [...new Set(box)].filter((r) => HONEST_RELICS.includes(r));
+  const minionPool = boxPool.length > 0 ? boxPool : ["villager"];
+  for (const v of villagers) {
+    if (v.claimRole) continue;
+    if (v.relic === "sacrifice") v.claimRole = pick(rng, villagerPool);
+    else if (v.relic === "minion") v.claimRole = pick(rng, minionPool);
+  }
+}
+
 export function createVillage(rng) {
   const relics = shuffle(rng, DEFAULT_RELIC_LAYOUT);
   const names = drawNames(rng, relics.length);
@@ -59,14 +77,7 @@ export function createVillage(rng) {
   }));
   const box = [...BOX_SEED];
 
-  // 제물/하수인은 "무슨 유물이라고 사칭할지"를 마을 생성 시 한 번 정한다(커버는 안 바뀜).
-  // 근거(누구를 봤다, 짝이 누구다 등)는 매일 새로 지어낸다 — 도둑/문제아/취객도 이제
-  // 매일 밤 실제로 유물이 바뀌니, 고정된 거짓 근거를 대는 게 오히려 부자연스럽다.
-  const honestPresent = [...new Set(villagers.map((v) => v.relic))].filter((r) => HONEST_RELICS.includes(r));
-  const pool = honestPresent.length > 0 ? honestPresent : ["villager"];
-  for (const v of villagers) {
-    if (v.relic === "sacrifice" || v.relic === "minion") v.claimRole = pick(rng, pool);
-  }
+  ensureClaimRoles(rng, villagers, box);
 
   return { villagers, box };
 }
@@ -81,6 +92,10 @@ function cascadeRobber(rng, villagers) {
   if (others.length === 0) return;
   const target = pick(rng, others);
   [robber.relic, target.relic] = [target.relic, robber.relic];
+  // robber(원래 도둑)는 오늘 밤 target의 정체를 훔쳐서 새 역할이 됐다 — 그 사실을 알고
+  // 있으므로, 오늘 낮 자신의(새 역할) 증언에 "누구 걸 훔쳤는지"를 덧붙일 수 있다.
+  // target은 반대로 영문도 모른 채 도둑의 유물을 떠안는다.
+  robber.stoleFrom = target.name;
 }
 
 function cascadeTroublemaker(rng, villagers) {
@@ -141,7 +156,13 @@ function buildClaim(rng, state, speaker) {
     }
   }
 
-  const line = (CLAIM_LINES[role] || CLAIM_LINES.villager)(ctx);
+  let line = (CLAIM_LINES[role] || CLAIM_LINES.villager)(ctx);
+  // 오늘 밤 도둑질로 지금 이 역할을 갖게 됐다면, 누구 것을 훔쳤는지 스스로 밝힐 수 있다
+  // (다른 유물로 사칭 중인 제물/하수인이 이 사실을 알 리는 없으니 threat면 건너뛴다).
+  if (!threat && speaker.stoleFrom) {
+    line += ` 사실 어젯밤 도둑의 유물로 ${speaker.stoleFrom}의 유물을 훔쳐온 거예요.`;
+  }
+
   let mood = "";
   if (threat) mood = " " + pick(rng, CORRUPTED_MOOD);
   else if (role === "villager" && rng() < 0.3) mood = " " + pick(rng, NERVOUS_MOOD);
@@ -167,12 +188,14 @@ function runNightPhase(state, rng) {
   });
 
   // 오늘 밤 캐스케이드는 여기서만 일어나므로, 이전 상태와 공유되던 참조를 먼저 떼어낸다.
-  const villagers = state.villagers.map((v) => ({ ...v }));
+  // stoleFrom은 "바로 어젯밤" 도둑맞았을 때만 유효한 정보라 매일 밤 초기화한다.
+  const villagers = state.villagers.map((v) => ({ ...v, stoleFrom: undefined }));
   const box = [...state.box];
 
   cascadeRobber(rng, villagers);
   cascadeTroublemaker(rng, villagers);
   cascadeDrunk(rng, villagers, box);
+  ensureClaimRoles(rng, villagers, box); // 캐스케이드로 새로 제물/하수인이 된 사람에게 커버 부여
 
   const nextState = { ...state, villagers, box };
 
@@ -200,12 +223,28 @@ export function startRun(rng) {
 }
 
 export function jail(state, id) {
-  const villagers = state.villagers.map((v) => (v.id === id ? { ...v, jailed: true } : v));
-  return {
-    ...state,
-    villagers,
-    log: [...state.log, { day: state.day, phase: "day", text: `장로가 ${nameOf(state, id)}을(를) 감옥에 가뒀다.` }],
-  };
+  const target = state.villagers.find((v) => v.id === id);
+  if (!target || target.jailed) return state; // 이미 갇혀있으면 할 일 없음
+
+  // 감옥은 한 자리뿐 — 새로 가두면 먼저 있던 사람은 풀려난다.
+  const previouslyJailed = state.villagers.find((v) => v.jailed && v.id !== id);
+  const villagers = state.villagers.map((v) => {
+    if (v.id === id) return { ...v, jailed: true };
+    if (v.jailed) return { ...v, jailed: false };
+    return v;
+  });
+
+  const log = [...state.log];
+  if (previouslyJailed) {
+    log.push({
+      day: state.day,
+      phase: "day",
+      text: `감옥은 한 자리뿐이라, ${previouslyJailed.name}이(가) 먼저 풀려났다.`,
+    });
+  }
+  log.push({ day: state.day, phase: "day", text: `장로가 ${nameOf(state, id)}을(를) 감옥에 가뒀다.` });
+
+  return { ...state, villagers, log };
 }
 
 export function release(state, id) {

@@ -1,13 +1,122 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>붉은달의 의식</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <!-- 모바일: 100vh 대신 dvh/innerHeight 기반 (주소창이 버튼을 밀어내는 버그 예방) -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <title>붉은달의 의식</title>
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="icon" href="./icon-192.png" />
+  <link rel="apple-touch-icon" href="./icon-180.png" />
+  <script>
+    // PWA 설치 프롬프트는 모듈 로드 전에 발생할 수 있으므로 head 인라인에서 선캡처 (uritichu 교훈)
+    window.deferredInstallPrompt = null;
+    window.addEventListener("beforeinstallprompt", (e) => {
+      e.preventDefault();
+      window.deferredInstallPrompt = e;
+    });
+  </script>
+  <style>
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin: 0; height: 100%; }
+    body {
+      font-family: sans-serif; background: #0d0c10; color: #cfcfcf;
+      /* dvh 지원 브라우저는 dvh, 아니면 js가 --vh를 갱신 */
+      height: 100dvh;
+      display: flex; flex-direction: column;
+      padding: env(safe-area-inset-top) env(safe-area-inset-right)
+               env(safe-area-inset-bottom) env(safe-area-inset-left);
+    }
+    /* 액션 버튼은 스크롤 영역 밖에 고정, 가변 콘텐츠만 내부 스크롤 */
+    #game-area { flex: 1 1 auto; overflow-y: auto; min-height: 0; }
+    #action-bar { flex: 0 0 auto; padding: 10px; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+    #action-bar button { padding: 12px 22px; border: 0; border-radius: 10px; background: #3a4256; color: #fff; font-size: 15px; }
+    dialog { border: 0; border-radius: 14px; max-width: 420px; padding: 18px; background: #1c1a22; color: #eee; }
+    dialog::backdrop { background: rgba(0, 0, 0, 0.6); }
+
+    .screen { max-width: 720px; margin: 0 auto; padding: 24px 16px 32px; display: flex; flex-direction: column; gap: 12px; }
+    .title-screen, .end-screen { text-align: center; align-items: center; }
+    .title-screen h1, .end-screen h1 { color: #c62828; letter-spacing: 0.05em; margin: 8px 0 16px; }
+    .intro-line { color: #cfcfcf; max-width: 480px; line-height: 1.6; margin: 0 0 4px; }
+    .primary-button { padding: 12px 28px; background: #7a1f1f; color: #fff; border: 1px solid #c62828; border-radius: 8px; font-size: 16px; }
+    .primary-button:active { background: #c62828; }
+
+    .run-header { color: #c62828; text-align: center; margin: 4px 0 12px; }
+    .log { background: #16141a; border: 1px solid #2c2732; border-radius: 8px; padding: 16px; min-height: 60px; display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+    .log-line { margin: 0; color: #cfcfcf; line-height: 1.5; }
+    .log-line.night { color: #8b8b9a; font-style: italic; }
+
+    .villagers { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; }
+    .villager-card { background: #1c1a22; border: 1px solid #322d3a; border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+    .villager-card.jailed { border-color: #5a4a1f; background: #221f16; }
+    .villager-name { font-weight: 600; }
+    .villager-status { font-size: 12px; color: #8b8b9a; }
+    .villager-actions { display: flex; gap: 6px; }
+    .villager-actions button { flex: 1; padding: 8px 4px; font-size: 12px; border-radius: 4px; border: 1px solid #3a3542; background: #26222c; color: #eee; }
+    .villager-actions .danger-button { border-color: #7a1f1f; color: #ff8080; }
+    .villager-actions .danger-button:active { background: #7a1f1f; color: #fff; }
+
+    .relic-legend { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; font-size: 11px; color: #6f6a7a; }
+    .relic-hint { border: 1px dashed #3a3542; border-radius: 4px; padding: 2px 6px; }
+  </style>
+</head>
+<body>
+  <div id="game-area"></div>
+  <div id="action-bar"></div>
+
+  <!-- 게임 방법 모달: 처음부터 자리 마련 -->
+  <dialog id="rules-modal">
+    <h2 style="margin-top:0">게임 방법</h2>
+    <p>매일 밤 유물의 힘이 발휘되고, 낮에는 주민들의 증언을 듣습니다.</p>
+    <p>장로는 매일 반드시 한 명을 처형해야 합니다 — 그날의 진짜 제물의 유물 소지자를
+      정확히 맞혀야 하며, 틀리면 의식이 실패해 즉시 게임이 끝납니다.</p>
+    <p>의심되는 사람은 처형 대신 감옥에 가둘 수도 있습니다(선택, 되돌릴 수 있음).
+      의식에 제물의 유물을 몰래 들여온 배신자(하수인)를 가두지 못하면, 하수인이
+      밤마다 제물의 유물을 다른 사람에게 옮깁니다.</p>
+    <p>배신자를 가두고 그날의 진짜 제물을 처형하면 의식이 끝나고 승리합니다.
+      이레(7일) 안에 끝내지 못해도 실패합니다.</p>
+    <button onclick="this.closest('dialog').close()">닫기</button>
+  </dialog>
+
+  <script type="module">
+    import { APP_VERSION } from "./js/app-config.js?v=20260731-1";
+    import { mountVersionBadge, mountErrorOverlay } from "./js/devtools.js?v=20260731-1";
+    import { initAudio } from "./js/audio.js?v=20260731-1";
+    import "./js/ui.js?v=20260731-1";
+
+    mountErrorOverlay(); // 가장 먼저 — 초기화 에러도 잡히게
+    mountVersionBadge();
+    initAudio();
+
+    const rulesBtn = document.createElement("button");
+    rulesBtn.id = "rules-btn";
+    rulesBtn.textContent = "게임 방법";
+    rulesBtn.style.cssText = "position:fixed;left:6px;bottom:6px;z-index:9998;font-size:11px;padding:6px 10px;border:0;border-radius:8px;background:#0006;color:#fff;";
+    rulesBtn.onclick = () => document.getElementById("rules-modal").showModal();
+    document.body.appendChild(rulesBtn);
+
+    // dvh 미지원 브라우저 폴백 + 뷰포트 변화 시 재측정 (uritichu 교훈)
+    const setVh = () =>
+      document.body.style.height = window.innerHeight + "px";
+    if (!CSS.supports("height", "100dvh")) {
+      setVh();
+      window.addEventListener("resize", setVh);
+    }
+
+    // SW 등록 + 새 버전 활성화 시 1회 자동 reload (캐시 고착 방지 확정 패턴)
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("./sw.js?v=" + APP_VERSION);
+      navigator.serviceWorker.addEventListener("controllerchange", () => {
+        if (sessionStorage.getItem("sw-reloaded")) return;
+        sessionStorage.setItem("sw-reloaded", "1");
+        location.reload();
+      });
+      window.addEventListener("load", () =>
+        setTimeout(() => sessionStorage.removeItem("sw-reloaded"), 3000)
+      );
+    }
+  </script>
+</body>
 </html>

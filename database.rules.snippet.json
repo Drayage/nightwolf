@@ -1,0 +1,12 @@
+{
+  "_설명": "이 블록을 공유 Firebase 프로젝트(deadline-38cdb)의 기존 database rules 안에 병합한다. 아직 온라인 모드를 안 써서 미적용 상태 — 봇전/멀티 모드를 붙일 때 실제로 병합할 것. 기존 다른 게임의 규칙을 덮어쓰지 말 것. 'read/write: true' 전체 개방은 금지 (누구나 데이터 삭제 가능).",
+  "rules": {
+    "redmoon_rooms": {
+      "$code": {
+        ".read": "auth != null",
+        ".write": "auth != null",
+        ".validate": "$code.matches(/^[A-HJ-NP-Z2-9]{4,8}$/)"
+      }
+    }
+  }
+}

@@ -29,19 +29,19 @@ export const RELIC_INFO = {
   },
   troublemaker: {
     name: "혼돈의 유물",
-    description: "밤마다 두 사람 사이에 헛소문을 흘려 낮의 증언을 뒤섞는다. 정작 자신은 아무것도 알아내지 못한다.",
+    description: "밤마다 다른 사람 하나의 입을 막는다. 그 사람은 그날 낮 동안 아무 증언도 하지 못한다.",
   },
   drunk: {
     name: "몽롱한 유물",
-    description: "너무 취해서 매번 자신이 무슨 힘을 썼는지조차 기억하지 못한다.",
+    description: "너무 취해서 매일 밤 자신이 무슨 유물인지조차 다르게 착각한다 — 낮의 주장이 밤마다 바뀐다.",
   },
   hunter: {
     name: "사냥꾼의 유물",
-    description: "억울하게 처형당하면 죽어가며 저주를 남긴다고 전해진다.",
+    description: "억울하게 처형되면, 마지막 힘으로 감옥에 갇힌 자의 진짜 정체를 폭로하고 죽는다.",
   },
   tanner: {
     name: "무두장이의 유물",
-    description: "이 짓거리가 지긋지긋해서, 오히려 자신이 처형되기를 바란다.",
+    description: "이 짓거리가 지긋지긋해서 오히려 처형되기를 바란다. 처형되면 의식은 실패하지만 결말이 다르게 갈린다.",
   },
   mason: {
     name: "결계의 유물",
@@ -109,7 +109,9 @@ export const CLAIM_LINES = {
       ctx.strange ? "손끝이 서늘할 만큼 이상했어요." : "그냥 평범한 기운이었어요."
     }`,
   troublemaker: (ctx) =>
-    `나는 혼돈의 유물입니다. 어젯밤 ${ctx.targetName}${and(ctx.targetName)} ${ctx.targetName2} 사이에 헛소문을 흘려놨어요.`,
+    ctx.targetName
+      ? `나는 혼돈의 유물입니다. 오늘 ${ctx.targetName}의 입을 막아놨어요.`
+      : "나는 혼돈의 유물입니다. 오늘은 딱히 손쓸 대상이 없었어요.",
   drunk: () => "나는 몽롱한 유물입니다. 사실 어젯밤 일이 하나도 기억나지 않아요.",
   hunter: () => "나는 사냥꾼의 유물입니다. 저를 억울하게 건드리면 가만있지 않을 겁니다.",
   tanner: () => "나는 무두장이의 유물입니다. 솔직히... 차라리 제가 처형됐으면 좋겠어요.",
@@ -134,7 +136,14 @@ export const NERVOUS_MOOD = [
   "말을 아끼며 주위를 살핀다.",
 ];
 
-// 처형당한 대상이 사냥꾼/무두장이일 때 붙는 결말 전용 대사(연출용, 승패 판정에는 영향 없음).
-export const HUNTER_DEATH_LINE =
-  "사냥꾼의 유물이 바닥에 떨어지며 낮게 울린다. 죽어가던 그가 마지막으로 누군가를 노려본다...";
-export const TANNER_DEATH_LINE = "무두장이는 오히려 옅은 미소를 지으며 눈을 감았다. 원했던 대로 되었다는 듯이.";
+// 사냥꾼이 처형될 때: 감옥에 갇힌 자가 있으면 그의 진짜 정체를 실제로 폭로한다(실질 효과).
+export function hunterRevealLine(jailedName, jailedRelicName) {
+  if (!jailedName) return "사냥꾼의 유물이 바닥에 떨어지며 낮게 울린다. 하지만 가리킬 자가 감옥에 없다.";
+  return `사냥꾼의 유물이 마지막 힘을 다해 감옥에 갇힌 ${jailedName}을(를) 가리킨다. 그의 진짜 정체는 [${jailedRelicName}]이었다.`;
+}
+
+// 무두장이가 처형될 때: 일반 오판과는 다른 결말(연출 + 별도 상태 'tanner')로 갈린다.
+export const TANNER_ENDING_TITLE = "무두장이의 소원";
+export const TANNER_ENDING_TEXT =
+  "무두장이는 오히려 옅은 미소를 지으며 눈을 감았다. 원했던 대로 되었다는 듯이. " +
+  "하지만 의식은 여전히 완성되지 못했다 — 진짜 제물은 어딘가에서 이 결말을 지켜보고 있다.";

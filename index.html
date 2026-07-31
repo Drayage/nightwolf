@@ -47,6 +47,11 @@
     .log { background: #16141a; border: 1px solid #2c2732; border-radius: 8px; padding: 16px; min-height: 60px; display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
     .log-line { margin: 0; color: #cfcfcf; line-height: 1.5; }
     .log-line.night { color: #8b8b9a; font-style: italic; }
+    .log-line.markable { cursor: pointer; padding: 4px 6px; margin: 0 -6px; border-radius: 6px; }
+    .log-line.markable:active { background: #221f26; }
+    .log-line.marked-o { color: #7ee08a; }
+    .log-line.marked-x { color: #ff8080; }
+    .log-line.marked-q { color: #e0c56a; }
 
     .villagers { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; }
     .villager-card { background: #1c1a22; border: 1px solid #322d3a; border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
@@ -58,8 +63,14 @@
     .villager-actions .danger-button { border-color: #7a1f1f; color: #ff8080; }
     .villager-actions .danger-button:active { background: #7a1f1f; color: #fff; }
 
-    .relic-legend { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; font-size: 11px; color: #6f6a7a; }
-    .relic-hint { border: 1px dashed #3a3542; border-radius: 4px; padding: 2px 6px; }
+    .mark-badge { display: inline-block; width: 18px; height: 18px; line-height: 18px; text-align: center; border-radius: 50%; font-size: 11px; font-weight: 700; }
+    .mark-badge.mark-o { background: #1f3a24; color: #7ee08a; }
+    .mark-badge.mark-x { background: #3a1f1f; color: #ff8080; }
+    .mark-badge.mark-q { background: #3a331f; color: #e0c56a; }
+
+    .relic-legend { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+    .relic-hint { border: 1px dashed #3a3542; border-radius: 4px; padding: 4px 8px; font-size: 11px; background: transparent; color: #6f6a7a; }
+    .relic-hint:active { background: #221f26; color: #cfcfcf; }
   </style>
 </head>
 <body>
@@ -80,11 +91,18 @@
     <button onclick="this.closest('dialog').close()">닫기</button>
   </dialog>
 
+  <!-- 유물 능력 설명 모달: js/ui.js가 유물 목록을 탭할 때 내용을 채워서 연다 -->
+  <dialog id="relic-modal">
+    <h2 id="relic-modal-title" style="margin-top:0"></h2>
+    <p id="relic-modal-desc"></p>
+    <button onclick="this.closest('dialog').close()">닫기</button>
+  </dialog>
+
   <script type="module">
-    import { APP_VERSION } from "./js/app-config.js?v=20260731-2";
-    import { mountVersionBadge, mountErrorOverlay } from "./js/devtools.js?v=20260731-2";
-    import { initAudio } from "./js/audio.js?v=20260731-2";
-    import "./js/ui.js?v=20260731-2";
+    import { APP_VERSION } from "./js/app-config.js?v=20260731-3";
+    import { mountVersionBadge, mountErrorOverlay } from "./js/devtools.js?v=20260731-3";
+    import { initAudio } from "./js/audio.js?v=20260731-3";
+    import "./js/ui.js?v=20260731-3";
 
     mountErrorOverlay(); // 가장 먼저 — 초기화 에러도 잡히게
     mountVersionBadge();

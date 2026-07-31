@@ -5,11 +5,12 @@ import {
   DEFAULT_RELIC_LAYOUT,
   VILLAGER_NAME_POOL,
   HONEST_RELICS,
+  RELIC_INFO,
   CLAIM_LINES,
   CORRUPTED_MOOD,
   NERVOUS_MOOD,
-  HUNTER_DEATH_LINE,
-  TANNER_DEATH_LINE,
+  hunterRevealLine,
+  TANNER_ENDING_TEXT,
 } from "./data/relics.js";
 
 function pick(rng, arr) {
@@ -57,21 +58,26 @@ export function createVillage(rng) {
   );
 }
 
-function effectiveClaimRole(v) {
-  return v.relic === "sacrifice" || v.relic === "minion" ? v.claimRole : v.relic;
+// 취객은 자기 유물을 스스로도 착각한다 — 매일 밤 다른 "진짜" 유물을 무작위로 주장한다
+// (드렁크 자신은 절대 제외: "나는 몽롱한 유물이다"라고는 스스로 말하지 않는다).
+function resolveClaimRole(rng, speaker) {
+  if (speaker.relic === "sacrifice" || speaker.relic === "minion") return speaker.claimRole;
+  if (speaker.relic === "drunk") return pick(rng, HONEST_RELICS.filter((r) => r !== "drunk"));
+  return speaker.relic;
 }
 
-function isHonestSpeaker(v) {
-  return v.relic !== "sacrifice" && v.relic !== "minion";
+function isThreat(v) {
+  return v.relic === "sacrifice" || v.relic === "minion";
 }
 
 // 낮 증언 한 줄 — "나는 [유물]이다. [구체적 근거]." 형태의 확인 가능한 주장을 만든다.
-// 정직한 화자(제물/하수인이 아님)는 진짜 결과를, 오염된 화자는 사칭한 역할에 맞춰
-// 그럴듯하게 지어낸 결과를 말한다. 둘 다 문장 형태는 동일해서, 같은 유물을 주장하는
-// 사람이 정원(ROLE_SLOTS)보다 많으면 그 자체가 추궁 단서가 된다.
-function buildClaim(rng, state, speaker) {
-  const role = effectiveClaimRole(speaker);
-  const honest = isHonestSpeaker(speaker);
+// "정보가 진짜인가"는 화자가 실제로 그 유물을 갖고 있는가(reliable)로 결정한다 — 취객처럼
+// 무해해도 진짜 그 유물이 아니면 근거는 지어낸 것이다. 둘 다 문장 형태는 동일해서, 같은
+// 유물을 주장하는 사람이 정원(ROLE_SLOTS)보다 많으면 그 자체가 추궁 단서가 된다.
+function buildClaim(rng, state, speaker, silencedId) {
+  const role = resolveClaimRole(rng, speaker);
+  const reliable = speaker.relic === role;
+  const threat = isThreat(speaker);
   const others = state.villagers.filter((v) => v.alive && v.id !== speaker.id);
 
   const ctx = {};
@@ -84,26 +90,27 @@ function buildClaim(rng, state, speaker) {
     // 유물 종류가 아니라 "현재" 위협인지로 판정: 제물의 유물은 하수인이 방치되면
     // 다른 사람에게 옮겨가므로(relic 필드는 안 바뀜) sacrificeHolderId 기준으로 봐야 한다.
     const trueStrange = target.id === state.sacrificeHolderId || target.id === state.minionId;
-    ctx.strange = honest ? trueStrange : rng() < 0.5; // 사칭이면 근거 없이 지어낸 값
+    ctx.strange = reliable ? trueStrange : rng() < 0.5; // 진짜가 아니면 근거 없이 지어낸 값
     ctx.targetName = target.name;
   } else if (role === "troublemaker") {
-    if (others.length < 2) return null;
-    const [a, b] = shuffle(rng, others);
-    ctx.targetName = a.name;
-    ctx.targetName2 = b.name;
+    if (reliable) {
+      const silenced = state.villagers.find((v) => v.id === silencedId);
+      ctx.targetName = silenced ? silenced.name : null;
+    } else if (others.length > 0) {
+      ctx.targetName = pick(rng, others).name; // 지어낸 이름 — 실제로 막힌 사람과 다를 수 있음
+    }
   } else if (role === "mason") {
-    if (honest) {
+    if (reliable) {
       const realPartner = state.villagers.find((v) => v.relic === "mason" && v.id !== speaker.id);
       ctx.partnerName = realPartner ? realPartner.name : null;
-    } else {
-      const fake = pick(rng, others.length > 0 ? others : [speaker]);
-      ctx.partnerName = fake.name; // 진짜 결계의 유물 소지자와는 다른 이름일 확률이 높음
+    } else if (others.length > 0) {
+      ctx.partnerName = pick(rng, others).name; // 진짜 결계의 유물 소지자와는 다른 이름일 확률이 높음
     }
   }
 
   const line = (CLAIM_LINES[role] || CLAIM_LINES.villager)(ctx);
   let mood = "";
-  if (!honest) mood = " " + pick(rng, CORRUPTED_MOOD);
+  if (threat) mood = " " + pick(rng, CORRUPTED_MOOD);
   else if (role === "villager" && rng() < 0.3) mood = " " + pick(rng, NERVOUS_MOOD);
 
   return {
@@ -126,8 +133,17 @@ function runNightPhase(state, rng) {
     text: "붉은달이 떠올랐다. 마을은 다시 한번 의식의 밤을 맞이한다.",
   });
 
+  // 진짜 혼돈의 유물 소지자(갇히지 않은 채 살아있어야 함)가 그날 입을 막을 대상을 고른다.
+  const troublemaker = state.villagers.find((v) => v.relic === "troublemaker" && v.alive && !v.jailed);
+  let silencedId = null;
+  if (troublemaker) {
+    const candidates = state.villagers.filter((v) => v.alive && v.id !== troublemaker.id);
+    if (candidates.length > 0) silencedId = pick(rng, candidates).id;
+  }
+
   for (const speaker of state.villagers.filter((v) => v.alive)) {
-    const claim = buildClaim(rng, state, speaker);
+    if (speaker.id === silencedId) continue; // 실제로 입이 막혀 그날은 증언하지 못한다
+    const claim = buildClaim(rng, state, speaker, silencedId);
     if (claim) log.push(claim);
   }
 
@@ -179,11 +195,29 @@ export function execute(state, id, rng) {
   const log = [...state.log, { day: state.day, phase: "day", text: `장로가 ${target.name}을(를) 제물로 처형했다.` }];
 
   if (!isCorrect) {
+    // 무두장이는 처형되길 원했던 자 — 일반적인 오판과는 다른 결말로 갈린다(실질 효과).
+    if (target.relic === "tanner") {
+      return {
+        ...state,
+        villagers,
+        log: [...log, { day: state.day, phase: "day", text: TANNER_ENDING_TEXT }],
+        status: "tanner",
+        lossReason: TANNER_ENDING_TEXT,
+      };
+    }
+
     const epilogue = [
       { day: state.day, phase: "day", text: `${target.name}은(는) 제물의 유물 소지자가 아니었다. 의식이 어긋났다...` },
     ];
-    if (target.relic === "hunter") epilogue.push({ day: state.day, phase: "day", text: HUNTER_DEATH_LINE });
-    if (target.relic === "tanner") epilogue.push({ day: state.day, phase: "day", text: TANNER_DEATH_LINE });
+    // 사냥꾼은 죽으며 감옥에 갇힌 자의 진짜 정체를 실제로 폭로한다(실질 효과).
+    if (target.relic === "hunter") {
+      const jailedVillager = villagers.find((v) => v.jailed && v.id !== target.id);
+      epilogue.push({
+        day: state.day,
+        phase: "day",
+        text: hunterRevealLine(jailedVillager?.name, jailedVillager ? RELIC_INFO[jailedVillager.relic].name : null),
+      });
+    }
 
     return {
       ...state,

@@ -34,6 +34,30 @@ export function clearGame() {
   localStorage.removeItem(KEY);
 }
 
+// 플레이어의 추리 메모(용의자 O/X/? 표시) — 게임 상태와 별개로 저장/복원한다.
+const MARKS_KEY = APP_ID + "_marks";
+
+export function saveMarks(marks) {
+  try {
+    localStorage.setItem(MARKS_KEY, JSON.stringify(marks));
+  } catch (e) {
+    /* 저장 실패는 게임을 막지 않는다 */
+  }
+}
+
+export function loadMarks() {
+  try {
+    const raw = localStorage.getItem(MARKS_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch (e) {
+    return {};
+  }
+}
+
+export function clearMarks() {
+  localStorage.removeItem(MARKS_KEY);
+}
+
 // 온라인 재입장 정보 (net.js와 함께 사용)
 const REJOIN_KEY = APP_ID + "_rejoin";
 export function saveRejoin(info) {

@@ -40,6 +40,16 @@
     .toggle-button { padding: 6px 16px; border: 1px solid #3a3542; border-radius: 20px; background: #26222c; color: #8b8b9a; font-size: 13px; min-width: 56px; }
     .toggle-button.on { background: #3a4256; border-color: #5a6480; color: #fff; }
 
+    .history-modal { max-width: 480px; max-height: 80vh; }
+    .history-modal[open] { display: flex; flex-direction: column; }
+    #history-content { overflow-y: auto; }
+    .history-day { margin-bottom: 16px; }
+    .history-day h3 { color: #c62828; font-size: 13px; margin: 0 0 6px; }
+    .history-line { margin: 0 0 4px; font-size: 13px; line-height: 1.5; color: #cfcfcf; }
+    .history-empty { color: #6f6a7a; font-size: 13px; }
+    .history-open-button { border: 1px dashed #3a3542; border-radius: 8px; padding: 8px 14px; font-size: 12px; background: transparent; color: #cfcfcf; }
+    .history-open-button:active { background: #221f26; }
+
     .screen { max-width: 720px; margin: 0 auto; padding: 24px 16px 32px; display: flex; flex-direction: column; gap: 12px; }
     .title-screen, .end-screen { text-align: center; align-items: center; }
     .title-screen h1, .end-screen h1 { color: #c62828; letter-spacing: 0.05em; margin: 8px 0 16px; }
@@ -119,6 +129,13 @@
     <button onclick="this.closest('dialog').close()">닫기</button>
   </dialog>
 
+  <!-- 지난 증언 모아보기: js/ui.js가 날짜별로 채워서 연다. 낮/종료 화면 둘 다에서 열 수 있음. -->
+  <dialog id="history-modal" class="history-modal">
+    <h2 style="margin-top:0">지난 증언</h2>
+    <div id="history-content"></div>
+    <button onclick="this.closest('dialog').close()">닫기</button>
+  </dialog>
+
   <!-- 설정 모달: 배경음/효과음 on-off. 값은 js/audio.js가 localStorage에 저장. -->
   <dialog id="settings-modal">
     <h2 style="margin-top:0">설정</h2>
@@ -134,11 +151,11 @@
   </dialog>
 
   <script type="module">
-    import { APP_VERSION } from "./js/app-config.js?v=20260731-10";
-    import { mountVersionBadge, mountErrorOverlay } from "./js/devtools.js?v=20260731-10";
-    import { initAudio, startBgm, stopBgm, setEnabled, isEnabled } from "./js/audio.js?v=20260731-10";
-    import { RITUAL } from "./js/palettes.js?v=20260731-10";
-    import "./js/ui.js?v=20260731-10";
+    import { APP_VERSION } from "./js/app-config.js?v=20260731-11";
+    import { mountVersionBadge, mountErrorOverlay } from "./js/devtools.js?v=20260731-11";
+    import { initAudio, startBgm, stopBgm, setEnabled, isEnabled } from "./js/audio.js?v=20260731-11";
+    import { RITUAL } from "./js/palettes.js?v=20260731-11";
+    import "./js/ui.js?v=20260731-11";
 
     mountErrorOverlay(); // 가장 먼저 — 초기화 에러도 잡히게
     mountVersionBadge();

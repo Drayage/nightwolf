@@ -11,6 +11,8 @@ const actionBar = document.getElementById("action-bar");
 const relicModal = document.getElementById("relic-modal");
 const relicModalTitle = document.getElementById("relic-modal-title");
 const relicModalDesc = document.getElementById("relic-modal-desc");
+const historyModal = document.getElementById("history-modal");
+const historyContent = document.getElementById("history-content");
 
 let state = loadGame();
 let marks = loadMarks(); // { [villagerId]: "O" | "X" | "?" } — 플레이어 자신의 추리 메모
@@ -53,6 +55,33 @@ function openRelicInfo(relicId) {
   relicModalTitle.textContent = info.name;
   relicModalDesc.textContent = info.description;
   relicModal.showModal();
+}
+
+// 지난 낮 증언을 날짜별로 모아 보여준다 — 패배 후 결과 화면에서도 열 수 있어야
+// 하므로 state.log를 그대로 참조한다(끝난 게임도 "다시 시작한다"를 누르기 전까지는
+// state가 남아있음).
+function openHistory() {
+  historyContent.innerHTML = "";
+  const byDay = new Map();
+  for (const entry of state.log) {
+    if (entry.meta?.kind !== "claim") continue;
+    if (!byDay.has(entry.day)) byDay.set(entry.day, []);
+    byDay.get(entry.day).push(entry.text);
+  }
+  const days = [...byDay.keys()].sort((a, b) => a - b);
+  if (days.length === 0) {
+    historyContent.appendChild(el("p", { class: "history-empty" }, "아직 아무도 입을 열지 않았다."));
+  } else {
+    for (const day of days) {
+      historyContent.appendChild(
+        el("div", { class: "history-day" }, [
+          el("h3", {}, `${day}일째 낮`),
+          ...byDay.get(day).map((text) => el("p", { class: "history-line" }, text)),
+        ])
+      );
+    }
+  }
+  historyModal.showModal();
 }
 
 function render() {
@@ -233,6 +262,7 @@ function renderEnd() {
   gameArea.appendChild(el("div", { class: "screen end-screen" }, children));
   playSfx(RITUAL, won ? "win" : "error");
 
+  actionBar.appendChild(el("button", { class: "history-open-button", onClick: openHistory }, "지난 증언 모아보기"));
   actionBar.appendChild(
     el(
       "button",
@@ -259,6 +289,7 @@ function renderDay() {
   const alive = state.villagers.filter((v) => v.alive);
 
   const header = el("h2", { class: "run-header" }, `${state.day}일째 낮 (최대 ${state.maxDays}일)`);
+  const historyButton = el("button", { class: "history-open-button", onClick: openHistory }, "지난 증언 모아보기");
 
   const logBox = el(
     "section",
@@ -366,7 +397,7 @@ function renderDay() {
     )
   );
 
-  gameArea.appendChild(el("div", { class: "screen run-screen" }, [header, logBox, cards, legend]));
+  gameArea.appendChild(el("div", { class: "screen run-screen" }, [header, historyButton, logBox, cards, legend]));
 }
 
 render();

@@ -120,23 +120,23 @@ export function createVillage(rng) {
 // 밤에 귀 기울여 얽힘 여부를 듣는 건 "카드가 실제로 움직였는가"(대상이 됐거나 자기
 // 유물이 바뀜) 기준이다 — 결계는 서로 정체를 아는 것뿐, 아무 유물도 움직이지 않으니
 // 소리가 안 남(involvedTonight을 아예 안 켠다).
-// 제물/하수인 유물도 도둑·문제아·취객을 거치며 다른 사람에게 넘어갈 수 있다(누가
-// "지금" 위험한지는 여전히 relic 하나로만 판정 — 처형 성공 여부, 승리 조건, 하수인의
-// 제물 심기 자격이 전부 relic 기준). 다만 **거짓말 여부는 다르다.** 제물/하수인은
-// "들자마자 안다"는 저주지만, 그건 그 순간 relic을 보고 매번 재확인하는 게 아니라
-// 게임 시작할 때 딱 한 번 확인하고 끝이다 — 그래서 원래(startingRelic) 제물/하수인
-// 이었던 사람은 지금 실제로 뭘 들고 있든 상관없이 계속 거짓말하고(자기가 여전히
-// 위험한 줄 앎, 재확인할 방법이 없어서), 반대로 도둑/문제아한테 그 유물을 떠넘겨받아
-// "지금" 진짜 위험해진 사람은 자기가 위험한 줄 전혀 몰라 태연히 진실만 말한다
-// (isThreat() 참고 — v.relic이 아니라 v.startingRelic으로 판정).
-// 평범/광기의 유물은 아무 능력도 없어서 숨길 것도, 재확인이 필요한 것도 없다 —
-// 매일 밤 시작하기 전에 자기 유물을 보고 들어간다. 그래서 도둑/문제아한테 다른
-// 능동 유물(예지/도둑/문제아/취객)을 뺏겨서 평범/광기가 된 사람은 바로 다음 날
-// 부터 그 사실 그대로("저는 평범한 유물이에요") 말한다 — belief가 며칠씩 묵은
-// 채로 남지 않는다(제물/하수인만 예외 — 그건 원래 그 유물을 가진 사람만 아는
-// 저주라 이 자기확인 대상이 아니다). 이 함수를 캐스케이드 맨 앞에서 돌리는 이유는
-// 그날 밤 실제로 능동 유물을 얻어 행동하게 되면(예: 도둑한테 뺏겨 결계가 된 경우)
-// 뒤이은 night*가 그 belief를 자연스럽게 다시 덮어써야 하기 때문이다.
+// 유물(relic)은 계속 유지되지만, belief(자기 인식)는 매일 밤 새로 생긴다 —
+// 다들 밤이 시작되기 전에 자기 유물을 스스로 확인하고 들어간다. 그래서:
+//  - 능동 유물(예지/도둑/문제아/취객)을 쥔 사람은 그날 밤 실제로 그 능력을 쓰고,
+//    belief가 그 행동으로 갱신된다(아래 night* 함수들).
+//  - 평범/광기처럼 아무 능력도 없는 유물은 숨길 것도 없으니 그냥 "확인한 그대로"
+//    믿는다(`syncPassiveBelief`) — 도둑/문제아한테 능동 유물을 뺏겨 평범/광기가
+//    된 사람은 바로 다음 날부터 정확히 그렇게 말한다.
+//  - **제물/하수인도 마찬가지다.** 그 유물을 얼떨결에 넘겨받은 사람은 그날 밤
+//    확인하는 순간 "헉, 내가 제물?"하며 그때부터 거짓말을 시작하고(`fakeBelief`),
+//    반대로 도둑/문제아한테 그 유물을 뺏긴 사람은 "나 이제 아니네" 하고 안심하며
+//    다시 진실을 말한다(`isThreat()`가 v.relic을 그대로 봄 — startingRelic이
+//    아님). 제물/하수인 유물 자체는 도둑·문제아·취객을 거치며 계속 다른 사람에게
+//    넘어갈 수 있다 — "지금" 누가 위험한지, 처형 성공 여부, 승리 조건, 하수인의
+//    제물 심기 자격 전부 relic 하나로 판정.
+// syncPassiveBelief를 캐스케이드 맨 앞에서 돌리는 이유는, 그날 밤 실제로 능동
+// 유물을 얻어 행동하게 되면(예: 확인 직후 도둑맞아 결계가 된 경우) 뒤이은
+// night*가 그 belief를 자연스럽게 다시 덮어써야 하기 때문이다.
 function syncPassiveBelief(villagers) {
   for (const v of villagers) {
     if (!v.alive || v.jailed) continue;
@@ -219,15 +219,16 @@ function nightDrunk(rng, villagers, box, day) {
   }
 }
 
-// 제물/하수인의 사칭(claimRole)은 처음 그 역할이 됐을 때 한 번만 정해지고 안 바뀐다.
-// 사칭의 "구체적 근거"(누굴 봤다, 누구랑 바꿨다 등)는 매일 밤 새로 지어낸다 — 진짜
-// 능력이 있는 척하려면 매일 그럴듯한 최신 정보를 대야 하기 때문이다(로버만 예외 —
-// 원래도 "모른다"가 정답이라 지어낼 필요가 없다).
-// 누가 사칭하는지는 startingRelic(원래부터 제물/하수인이었던 사람) 기준이다 — 처음에
-// 한 번 "나는 제물/하수인이다"를 확인한 뒤로는 따로 재확인할 방법이 없어서, 나중에
-// 도둑/문제아한테 그 유물을 뺏겨도 본인은 여전히 그런 줄 알고 계속 거짓말한다.
-// 반대로 지금 실제로 그 유물을 들고 있어도 원래 그게 아니었던 사람은 자기가 위험한
-// 줄 전혀 모른 채(belief 그대로) 태연히 진실만 말한다 — isThreat() 참고.
+// 제물/하수인도 평범/광기와 마찬가지로 매일 밤 자기 유물을 스스로 확인하고 들어간다
+// (syncPassiveBelief와 같은 원리 — 유물은 유지되지만 belief는 매일 밤 새로 생긴다).
+// 그래서 도둑/문제아한테 그 유물을 뺏기면 바로 다음 날부터 "나 이제 제물 아니네"
+// 하고 안심하며 진실을 말하고(isThreat() 참고 — v.relic 기준), 반대로 얼떨결에
+// 그 유물을 받은 사람은 그날 밤 확인하고서야 "헉, 내가 제물?" 하고 그 순간부터
+// 거짓말을 시작한다. claimRole(사칭 대상)만 한 번 정해지면 안 바뀐다 — 매일 같은
+// 거짓말쟁이 정체를 유지해야 앞뒤가 맞으니까. 사칭의 "구체적 근거"(누굴 봤다,
+// 누구랑 바꿨다 등)는 매일 밤 새로 지어낸다 — 진짜 능력이 있는 척하려면 매일
+// 그럴듯한 최신 정보를 대야 하기 때문이다(로버만 예외 — 원래도 "모른다"가
+// 정답이라 지어낼 필요가 없다).
 function refreshFakeBeliefs(rng, villagers, box, day) {
   const honestPresent = [...new Set(villagers.map((v) => v.relic))].filter((r) => HONEST_RELICS.includes(r));
   const villagerPool = honestPresent.length > 0 ? honestPresent : ["villager"];
@@ -235,8 +236,8 @@ function refreshFakeBeliefs(rng, villagers, box, day) {
   const minionPool = boxPool.length > 0 ? boxPool : ["villager"];
 
   for (const v of villagers) {
-    if (v.startingRelic !== "sacrifice" && v.startingRelic !== "minion") continue;
-    if (!v.claimRole) v.claimRole = pick(rng, v.startingRelic === "sacrifice" ? villagerPool : minionPool);
+    if (v.relic !== "sacrifice" && v.relic !== "minion") continue;
+    if (!v.claimRole) v.claimRole = pick(rng, v.relic === "sacrifice" ? villagerPool : minionPool);
 
     const role = v.claimRole;
     const others = villagers.filter((o) => o.alive && o.id !== v.id);
@@ -262,10 +263,11 @@ function refreshFakeBeliefs(rng, villagers, box, day) {
   }
 }
 
-// 거짓말 여부는 지금 실제로 뭘 들고 있는지가 아니라 "원래" 제물/하수인이었는지로
-// 정한다(startingRelic) — 처음에 한 번 정체를 확인한 뒤로 재확인이 없기 때문.
+// 거짓말 여부도 지금 실제로 뭘 들고 있는지(v.relic)로 정한다 — 매일 밤 자기 유물을
+// 스스로 확인하고 들어가기 때문에(refreshFakeBeliefs 참고), "원래" 뭐였는지는
+// 상관없다.
 function isThreat(v) {
-  return v.startingRelic === "sacrifice" || v.startingRelic === "minion";
+  return v.relic === "sacrifice" || v.relic === "minion";
 }
 
 // 낮 증언 한 줄 — belief(또는 사칭이면 fakeBelief)를 그대로 문장으로 옮긴다.

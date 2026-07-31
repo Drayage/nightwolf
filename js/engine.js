@@ -117,6 +117,9 @@ export function createVillage(rng) {
 // 같은 유물을 여럿이 쥐고 있을 때 "누가 먼저 능력을 썼는가"는 villagers 배열의 순서
 // (=낮 증언·주민 카드가 뜨는 순서, 절대 재배열되지 않음)를 그대로 따른다 — 그래서
 // 결계도 무작위로 짝짓지 않고 그 순서대로 앞에서부터 둘씩 묶는다.
+// 밤에 귀 기울여 얽힘 여부를 듣는 건 "카드가 실제로 움직였는가"(대상이 됐거나 자기
+// 유물이 바뀜) 기준이다 — 결계는 서로 정체를 아는 것뿐, 아무 유물도 움직이지 않으니
+// 소리가 안 남(involvedTonight을 아예 안 켠다).
 function nightMason(villagers) {
   const masons = villagers.filter((v) => v.relic === "mason" && v.alive && !v.jailed);
   for (let i = 0; i + 1 < masons.length; i += 2) {
@@ -124,8 +127,6 @@ function nightMason(villagers) {
     const b = masons[i + 1];
     a.belief = { role: "mason", partnerName: b.name };
     b.belief = { role: "mason", partnerName: a.name };
-    a.involvedTonight = true;
-    b.involvedTonight = true;
   }
   if (masons.length % 2 === 1) {
     masons[masons.length - 1].belief = { role: "mason", partnerName: null };
@@ -140,7 +141,7 @@ function nightSeer(rng, villagers) {
     if (others.length === 0) continue;
     const target = pick(rng, others);
     seer.belief = { role: "seer", targetId: target.id, targetName: target.name, targetRelic: target.relic };
-    seer.involvedTonight = true;
+    // 예지 자신은 유물도 안 바뀌고 대상도 아니다 — 얽힘은 "보인" 쪽만.
     target.involvedTonight = true;
   }
 }
@@ -156,6 +157,7 @@ function nightRobber(rng, villagers) {
     // robber는 누구와 바꿨는지는 알지만(주머니 밖 행동), 뭘 받았는지는 안을 안 봐서 모른다.
     // target은 자기 유물이 바뀐 줄도 모른다 — belief 그대로 둔다.
     robber.belief = { role: "robber", swappedWithName: target.name };
+    // 도둑은 자기 유물도, 대상의 유물도 둘 다 바뀐다 — 그래서 둘 다 얽힘.
     robber.involvedTonight = true;
     target.involvedTonight = true;
   }
@@ -170,7 +172,7 @@ function nightTroublemaker(rng, villagers) {
     const [a, b] = shuffle(rng, others);
     [a.relic, b.relic] = [b.relic, a.relic];
     troublemaker.belief = { role: "troublemaker", targetName: a.name, targetName2: b.name };
-    troublemaker.involvedTonight = true;
+    // 문제아 자신의 유물은 그대로다 — 유물이 실제로 바뀐 a, b만 얽힘.
     a.involvedTonight = true;
     b.involvedTonight = true;
   }

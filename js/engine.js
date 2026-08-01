@@ -100,7 +100,13 @@ export function createVillage(rng) {
     startingRelic: relic, // 결말 공개용, 절대 안 바뀜
     alive: true,
     jailed: false,
-    belief: { role: relic }, // "내가 기억하는 나" — 처음엔 원래 유물 그대로
+    // "내가 기억하는 나" — 처음엔 원래 유물 그대로. 단, 제물/하수인으로 시작하는
+    // 사람은 예외: 그 값 자체가 CLAIM_LINES에 없는 유효하지 않은 belief.role이라(
+    // 위협인 동안은 fakeBelief로 가려지지만, 밤중에 그 유물을 뺏겨 무해해진 뒤
+    // 한 번도 직접 행동한 적이 없으면 이 raw 값이 그대로 새어 나온다) 무난한
+    // "평범한 유물" belief로 시작한다 — 어차피 첫날 밤 위협으로 남아있는 한
+    // fakeBelief가 대신 쓰이니 눈에 보이지 않는다.
+    belief: { role: relic === "sacrifice" || relic === "minion" ? "villager" : relic },
   }));
   const box = [...BOX_SEED];
   return { villagers, box };
@@ -140,28 +146,33 @@ export function createVillage(rng) {
 //    아님). 제물/하수인 유물 자체는 도둑·문제아·취객을 거치며 계속 다른 사람에게
 //    넘어갈 수 있다 — "지금" 누가 위험한지, 처형 성공 여부, 승리 조건, 하수인의
 //    제물 심기 자격 전부 relic 하나로 판정.
-// syncPassiveBelief를 캐스케이드 맨 앞에서 돌리는 이유는, 그날 밤 실제로 능동
-// 유물을 얻어 행동하게 되면(예: 확인 직후 도둑맞아 결계가 된 경우) 뒤이은
-// night*가 그 belief를 자연스럽게 다시 덮어써야 하기 때문이다.
-function syncPassiveBelief(villagers) {
+// syncPassiveBelief는 캐스케이드가 다 끝난 뒤(그날 밤 최종 relic 기준)에 돈다.
+// belief.day가 오늘이면(=이 밤에 실제로 능동 유물로 행동함, night* 함수들 참고)
+// 그 belief를 절대 안 건드린다 — 진짜로 있었던 일이니까(그 직후 다른 캐스케이드
+// 단계에서 유물을 또 뺏겼어도, "그 시점에 확인한 사실"은 그대로 유효). 그 외에는
+// 지금 실제로 평범/광기 유물을 쥐고 있으면 그걸로 belief를 되찍는다 — 원래
+// 제물/하수인이었지만 그날 밤 중간에 도둑/문제아한테 유물을 뺏겨 무해해진 사람도
+// 여기 걸린다(그 전까지는 사칭 belief를 쓴 적이 없으니 day가 안 찍혀 있어서).
+function syncPassiveBelief(villagers, day) {
   for (const v of villagers) {
     if (!v.alive || v.jailed) continue;
+    if (v.belief?.day === day) continue;
     if (v.relic === "villager" || v.relic === "madness") {
       v.belief = { role: v.relic };
     }
   }
 }
 
-function nightMason(villagers, actingRelic) {
+function nightMason(villagers, actingRelic, day) {
   const masons = villagers.filter((v) => actingRelic.get(v.id) === "mason" && v.alive && !v.jailed);
   for (let i = 0; i + 1 < masons.length; i += 2) {
     const a = masons[i];
     const b = masons[i + 1];
-    a.belief = { role: "mason", partnerName: b.name };
-    b.belief = { role: "mason", partnerName: a.name };
+    a.belief = { role: "mason", partnerName: b.name, day };
+    b.belief = { role: "mason", partnerName: a.name, day };
   }
   if (masons.length % 2 === 1) {
-    masons[masons.length - 1].belief = { role: "mason", partnerName: null };
+    masons[masons.length - 1].belief = { role: "mason", partnerName: null, day };
   }
 }
 
@@ -319,14 +330,16 @@ function runNightPhase(state, rng) {
   // 고정한다(다 같이 동시에 능력을 쓰고, 카드 이동 처리만 순서대로 하는 것).
   const actingRelic = new Map(villagers.map((v) => [v.id, v.relic]));
 
-  // 능동 유물 캐스케이드보다 먼저 — 아래 night*가 그날 밤 실제로 행동하게 된 사람의
-  // belief를 자연스럽게 덮어쓸 수 있도록.
-  syncPassiveBelief(villagers);
-  nightMason(villagers, actingRelic);
+  nightMason(villagers, actingRelic, state.day);
   nightSeer(rng, villagers, state.day, actingRelic);
   nightRobber(rng, villagers, state.day, actingRelic);
   nightTroublemaker(rng, villagers, state.day, actingRelic);
   nightDrunk(rng, villagers, box, state.day, actingRelic);
+  // 캐스케이드가 다 끝난 뒤(그날 밤 최종 relic 기준)에 돈다 — 그래야 밤중에
+  // 능동 유물을 뺏겨 평범/광기가 된 사람(원래 제물/하수인이었던 사람 포함)도
+  // 놓치지 않고 잡아낸다. 그날 밤 실제로 행동한 사람(belief.day === 오늘)은
+  // 절대 안 건드린다.
+  syncPassiveBelief(villagers, state.day);
   refreshFakeBeliefs(rng, villagers, box, state.day);
 
   const pendingClaims = [];

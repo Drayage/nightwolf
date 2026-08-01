@@ -107,11 +107,17 @@ export function createVillage(rng) {
 }
 
 // ── 매일 밤 캐스케이드: 비밀요원 → 천리안 → 도둑 → 문제아 → 취객 (원작 기상 순서) ──
-// 전부 "지금 그 유물을 쥔 사람"이 수행한다 — 그 유물이 밤마다 다른 사람에게 넘어갈
-// 수 있으므로 매번 새로 찾는다. belief는 오직 "행동한 사람"만 갱신된다 — 도둑맞은
-// 쪽/문제아에게 휘말린 쪽은 아무것도 모른 채 자기가 알던 대로만 계속 믿는다.
+// **누가 그 능력을 쓰는지는 그날 밤 시작 시점의 유물(스냅샷, `actingRelic`)로 딱 한
+// 번 정한다** — 다 같이 동시에 능력을 쓰는 거고, 처리(실제 카드 이동)만 순서대로
+// 하는 거라고 생각하면 된다. 그래서 도둑이 문제아의 유물을 훔쳐가도, 그 도둑은
+// 그날 밤 안에 문제아 능력까지 이어서 쓰지 않는다(원래 자기가 갖고 있던 도둑
+// 능력만 씀) — 반대로 문제아 쪽에서 유물을 뺏긴 사람도, 스냅샷에 문제아로
+// 기록돼 있으니 그날 밤 예정대로 문제아 능력을 쓴다(카드는 이미 넘어갔어도).
+// 카드 이동 자체(relic 값 교환)는 실시간으로 순서대로 일어나므로, 다음 날 밤부터는
+// 새로 스냅샷을 떠서 그 결과가 반영된다. belief는 오직 "행동한 사람"만 갱신된다 —
+// 도둑맞은 쪽/문제아에게 휘말린 쪽은 아무것도 모른 채 자기가 알던 대로만 계속 믿는다.
 // 구성이 무작위라 결계/예지/도둑/문제아/취객 모두 같은 밤에 여러 명 나올 수 있다 —
-// 그날 밤 시작 시점에 그 유물을 쥔 사람 전원이 각자 자기 몫의 능력을 쓴다(한 명뿐이라도
+// 스냅샷에 그 유물로 찍힌 사람 전원이 각자 자기 몫의 능력을 쓴다(한 명뿐이라도
 // 동작은 같다). 결계는 항상 짝수로 나오도록 설계돼 있지만, 감옥에 갇혀 이번 밤엔
 // 제외되는 경우 홀수가 될 수 있어 마지막 한 명은 짝 없이 남는다.
 // 같은 유물을 여럿이 쥐고 있을 때 "누가 먼저 능력을 썼는가"는 villagers 배열의 순서
@@ -146,8 +152,8 @@ function syncPassiveBelief(villagers) {
   }
 }
 
-function nightMason(villagers) {
-  const masons = villagers.filter((v) => v.relic === "mason" && v.alive && !v.jailed);
+function nightMason(villagers, actingRelic) {
+  const masons = villagers.filter((v) => actingRelic.get(v.id) === "mason" && v.alive && !v.jailed);
   for (let i = 0; i + 1 < masons.length; i += 2) {
     const a = masons[i];
     const b = masons[i + 1];
@@ -159,8 +165,8 @@ function nightMason(villagers) {
   }
 }
 
-function nightSeer(rng, villagers, day) {
-  const seers = villagers.filter((v) => v.relic === "seer" && v.alive && !v.jailed);
+function nightSeer(rng, villagers, day, actingRelic) {
+  const seers = villagers.filter((v) => actingRelic.get(v.id) === "seer" && v.alive && !v.jailed);
   for (const seer of seers) {
     // 갇힌 사람은 격리돼 있어 남의 능력의 대상도 될 수 없다 — 훔쳐볼 수도, 훔쳐갈 수도 없음.
     const others = villagers.filter((v) => v.alive && !v.jailed && v.id !== seer.id);
@@ -174,13 +180,13 @@ function nightSeer(rng, villagers, day) {
   }
 }
 
-function nightRobber(rng, villagers, day) {
-  const robbers = villagers.filter((v) => v.relic === "robber" && v.alive && !v.jailed);
+function nightRobber(rng, villagers, day, actingRelic) {
+  const robbers = villagers.filter((v) => actingRelic.get(v.id) === "robber" && v.alive && !v.jailed);
   for (const robber of robbers) {
     // 갇힌 사람은 격리돼 있어 남의 능력의 대상도 될 수 없다 — 훔쳐볼 수도, 훔쳐갈 수도 없음.
     // 제물/하수인 유물 자체는 여기서도 다른 유물과 똑같이 훔칠 수 있다(누가 지금
     // 위험한지는 여전히 relic이 정한다) — 다만 그렇게 훔쳐간 사람은 거짓말은 안
-    // 한다(아래 isThreat 참고: 거짓말 여부는 relic이 아니라 startingRelic 기준).
+    // 한다(아래 isThreat 참고: 거짓말 여부는 그날 밤 최종 relic 기준).
     const others = villagers.filter((v) => v.alive && !v.jailed && v.id !== robber.id);
     if (others.length === 0) continue;
     const target = pick(rng, others);
@@ -194,8 +200,8 @@ function nightRobber(rng, villagers, day) {
   }
 }
 
-function nightTroublemaker(rng, villagers, day) {
-  const troublemakers = villagers.filter((v) => v.relic === "troublemaker" && v.alive && !v.jailed);
+function nightTroublemaker(rng, villagers, day, actingRelic) {
+  const troublemakers = villagers.filter((v) => actingRelic.get(v.id) === "troublemaker" && v.alive && !v.jailed);
   for (const troublemaker of troublemakers) {
     // 갇힌 사람은 격리돼 있어 남의 능력의 대상도 될 수 없다 — 훔쳐볼 수도, 훔쳐갈 수도 없음.
     const others = villagers.filter((v) => v.alive && !v.jailed && v.id !== troublemaker.id);
@@ -209,8 +215,8 @@ function nightTroublemaker(rng, villagers, day) {
   }
 }
 
-function nightDrunk(rng, villagers, box, day) {
-  const drunks = villagers.filter((v) => v.relic === "drunk" && v.alive && !v.jailed);
+function nightDrunk(rng, villagers, box, day, actingRelic) {
+  const drunks = villagers.filter((v) => actingRelic.get(v.id) === "drunk" && v.alive && !v.jailed);
   for (const drunk of drunks) {
     box.push(drunk.relic);
     drunk.relic = drawFromBox(rng, box) ?? drunk.relic; // 방금 넣었으니 박스가 비어있을 리 없음
@@ -309,14 +315,18 @@ function runNightPhase(state, rng) {
   const villagers = state.villagers.map((v) => ({ ...v, involvedTonight: false }));
   const box = [...state.box];
 
+  // 그날 밤 시작 시점의 유물 스냅샷 — "누가 그 능력을 쓰는가"는 이 스냅샷 하나로
+  // 고정한다(다 같이 동시에 능력을 쓰고, 카드 이동 처리만 순서대로 하는 것).
+  const actingRelic = new Map(villagers.map((v) => [v.id, v.relic]));
+
   // 능동 유물 캐스케이드보다 먼저 — 아래 night*가 그날 밤 실제로 행동하게 된 사람의
   // belief를 자연스럽게 덮어쓸 수 있도록.
   syncPassiveBelief(villagers);
-  nightMason(villagers);
-  nightSeer(rng, villagers, state.day);
-  nightRobber(rng, villagers, state.day);
-  nightTroublemaker(rng, villagers, state.day);
-  nightDrunk(rng, villagers, box, state.day);
+  nightMason(villagers, actingRelic);
+  nightSeer(rng, villagers, state.day, actingRelic);
+  nightRobber(rng, villagers, state.day, actingRelic);
+  nightTroublemaker(rng, villagers, state.day, actingRelic);
+  nightDrunk(rng, villagers, box, state.day, actingRelic);
   refreshFakeBeliefs(rng, villagers, box, state.day);
 
   const pendingClaims = [];

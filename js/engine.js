@@ -144,8 +144,11 @@ export function createVillage(rng) {
 //  - 능동 유물(예지/도둑/문제아/취객)을 쥔 사람은 그날 밤 실제로 그 능력을 쓰고,
 //    belief가 그 행동으로 갱신된다(아래 night* 함수들).
 //  - 평범/광기처럼 아무 능력도 없는 유물은 숨길 것도 없으니 그냥 "확인한 그대로"
-//    믿는다(`syncPassiveBelief`) — 도둑/문제아한테 능동 유물을 뺏겨 평범/광기가
-//    된 사람은 바로 다음 날부터 정확히 그렇게 말한다.
+//    믿는다(`syncPassiveBelief`) — 단, 이것도 그날 밤 시작 시점 스냅샷 기준이다.
+//    도둑/문제아한테 능동 유물을 뺏겨 그 밤 시작할 때 이미 평범/광기였던 사람은
+//    바로 그날부터 정확히 그렇게 말하지만, 캐스케이드 도중에 얼떨결에 평범/광기
+//    카드를 "받기만" 한 사람은 그걸 직접 확인한 게 아니므로 그날은 원래(스냅샷)
+//    자기 모습을 계속 말하고, 다음 밤 자기 확인에서야 비로소 반영된다.
 //  - **제물/하수인도 마찬가지다.** `isThreat()`가 startingRelic이 아니라 그날 밤
 //    시작 시점의 유물(`actingRelic`)을 본다 — 그 유물을 넘겨받은 사람은 그날 밤
 //    확인하는 순간 "헉, 내가 제물?"하며 그때부터 거짓말을 시작하고(`fakeBelief`),
@@ -164,19 +167,20 @@ export function createVillage(rng) {
 // 끊이지 않는다 — 총량 자체는 이 2개뿐이라 늘어나지 않지만, 하수인을 잡기
 // 전까지는 상관없는 처형만으로 절대 끝낼 수 없다. 하수인을 가두는 순간에야
 // deliverBoxSacrifice가 멈추고, 그때 살아있는 나머지(최대 2명)만 처형하면 끝난다.
-// syncPassiveBelief는 캐스케이드가 다 끝난 뒤(그날 밤 최종 relic 기준)에 돈다.
-// belief.day가 오늘이면(=이 밤에 실제로 능동 유물로 행동함, night* 함수들 참고)
-// 그 belief를 절대 안 건드린다 — 진짜로 있었던 일이니까(그 직후 다른 캐스케이드
-// 단계에서 유물을 또 뺏겼어도, "그 시점에 확인한 사실"은 그대로 유효). 그 외에는
-// 지금 실제로 평범/광기 유물을 쥐고 있으면 그걸로 belief를 되찍는다 — 원래
-// 제물/하수인이었지만 그날 밤 중간에 도둑/문제아한테 유물을 뺏겨 무해해진 사람도
-// 여기 걸린다(그 전까지는 사칭 belief를 쓴 적이 없으니 day가 안 찍혀 있어서).
-function syncPassiveBelief(villagers, day) {
+// syncPassiveBelief도 다른 모든 판정(누가 능력을 쓰는가, 누가 위협인가)과 똑같이
+// actingRelic 스냅샷(그날 밤 시작 시점)을 기준으로 삼는다 — 캐스케이드 도중 도둑/
+// 문제아한테 얼떨결에 카드를 받은 건 "그날 밤 내가 직접 확인한 것"이 아니므로 절대
+// 반영하면 안 된다. 스냅샷이 평범/광기였던 사람만 그걸로 belief를 되찍는다(원래
+// 제물/하수인이었지만 그날 밤 시작 시점엔 이미 평범/광기로 빠져나와 있던 사람도
+// 자연히 여기 걸린다). 스냅샷이 평범/광기인 사람은 다른 어떤 night* 함수에도 안
+// 걸리므로(각자 자기 유물로만 필터링) belief.day가 오늘로 미리 찍힐 일이 없다 —
+// 그래서 "이미 오늘 행동했으면 건드리지 마라" 같은 가드가 따로 필요 없다.
+function syncPassiveBelief(villagers, day, actingRelic) {
   for (const v of villagers) {
     if (!v.alive || v.jailed) continue;
-    if (v.belief?.day === day) continue;
-    if (v.relic === "villager" || v.relic === "madness") {
-      v.belief = { role: v.relic };
+    const startedTonightAs = actingRelic.get(v.id);
+    if (startedTonightAs === "villager" || startedTonightAs === "madness") {
+      v.belief = { role: startedTonightAs };
     }
   }
 }
@@ -401,11 +405,9 @@ function runNightPhase(state, rng) {
   // 정하지만, 다른 능력이 다 끝난 뒤 맨 마지막에 깨어 확인하는 값 자체는 그날 밤
   // 최종(실시간) relic이다.
   nightInsomniac(rng, villagers, state.day, actingRelic);
-  // 캐스케이드가 다 끝난 뒤(그날 밤 최종 relic 기준)에 돈다 — 그래야 밤중에
-  // 능동 유물을 뺏겨 평범/광기가 된 사람(원래 제물/하수인이었던 사람 포함)도
-  // 놓치지 않고 잡아낸다. 그날 밤 실제로 행동한 사람(belief.day === 오늘)은
-  // 절대 안 건드린다.
-  syncPassiveBelief(villagers, state.day);
+  // actingRelic 스냅샷만 보므로 캐스케이드 앞뒤 어디서 돌든 결과는 같다 — 순서는
+  // 그냥 가독성을 위해 여기 둔 것뿐.
+  syncPassiveBelief(villagers, state.day, actingRelic);
   refreshFakeBeliefs(rng, villagers, box, state.day, actingRelic);
 
   const pendingClaims = [];

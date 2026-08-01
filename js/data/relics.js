@@ -128,16 +128,14 @@ export const CLAIM_LINES = {
     belief.partnerName
       ? `저는 결계의 유물이에요. 제 짝은 ${belief.partnerName}${copula(belief.partnerName)}.`
       : "저는 결계의 유물이에요. 짝이 있었을 텐데, 이제 소식을 알 수 없어요.",
-  // "누가 선잠의 유물인가"(actingRelic 스냅샷)는 자정 전에 이미 정해지지만, 확인 자체는
-  // 캐스케이드 맨 마지막(nightInsomniac)이라 그 밤에 도둑/문제아가 먼저 카드를 훔쳐가
-  // 버리면 그 밤엔 확인을 못 한다. 그런데 반대로 "그날 밤 시작할 땐 안 갖고 있다가
-  // 도둑/문제아한테 이 유물을 받기만" 한 사람은 지금 실제로 선잠의 유물을 들고 있지만
-  // (그래서 syncPassiveBelief도 안 건드림 — 그건 평범/광기 유물만 리셋한다), 정작
-  // actingRelic 스냅샷엔 안 찍혀 있었으니 그 밤엔 확인할 기회 자체가 없었다 — 마지막으로
-  // 확인했던 며칠 전 belief가 그대로 남는다. 드물지만 실제로 일어나므로 recency()로
-  // "어젯밤"과 "예전에"를 구분해야 한다.
-  insomniac: (belief, day) =>
-    `저는 선잠의 유물이에요. ${recency(belief, day)} 다들 잠든 뒤에 제 유물을 확인해보니 ${
+  // 그날 밤 시작할 땐 선잠의 유물이 아니었다가 도둑/문제아한테 받기만 한 사람은
+  // actingRelic 스냅샷이 선잠이 아니므로 nightInsomniac이 그 사람을 건드리지 않고
+  // (그 밤엔 원래(스냅샷) 자기 모습을 계속 말함 — engine.js의 syncPassiveBelief 참고),
+  // 스냅샷이 진짜 선잠이었던 사람은 대상이 필요 없는 자기 확인이라 갇히지만 않으면
+  // 매일 밤 무조건 새로 확인한다. 그래서 이 줄까지 오는 belief는 항상 오늘 것뿐이라
+  // recency() 분기가 필요 없다.
+  insomniac: (belief) =>
+    `저는 선잠의 유물이에요. 어젯밤 다들 잠든 뒤에 제 유물을 확인해보니 ${
       RELIC_INFO[belief.sawRelic]?.name ?? "알 수 없는 유물"
     }이었어요.`,
   jailed: () => "어젯밤 감옥에 갇혀 있어서 아무것도 할 수 없었어요.",

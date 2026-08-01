@@ -4,7 +4,7 @@
 
 export const APP_ID = "redmoon"; // Firebase 네임스페이스 프리픽스: `${APP_ID}_rooms/...`
 export const APP_NAME = "붉은달의 의식";
-export const APP_VERSION = "20260731-20";
+export const APP_VERSION = "20260731-21";
 
 // 공유 Firebase 프로젝트 config (Drayage/DEADLINE에서 복사 — deadline-38cdb 프로젝트).
 // 새 프로젝트를 만들지 말 것. 아직 온라인 모드를 쓰지 않아 net.js는 미사용 상태.

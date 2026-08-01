@@ -109,9 +109,10 @@ export function createVillage(rng) {
   }));
   // 그림자의 유물이 첫 시작에 유물함에 제물의 유물을 하나 미리 심어둔다 — 이게
   // 유일한 여분이라 제물의 유물은 게임 전체에서 최대 2개(처음 시작한 1명 + 이
-  // 여분 1개)까지만 존재할 수 있다(deliverBoxSacrifice 참고). 처형된 제물의
-  // 유물이 유물함으로 안 돌아가는 것과 짝을 이루는 규칙 — 안 그러면 처형 → 유물함
-  // 복귀 → 취객이 다시 뽑음 → 새 제물이 되는 식으로 무한히 복제될 수 있었다.
+  // 여분 1개)까지만 존재할 수 있다. 처형된 제물의 유물도 다른 유물처럼 유물함으로
+  // 돌아가지만, 총량은 이 2개뿐이라 늘어나지 않는다(deliverBoxSacrifice 참고) —
+  // 늘어난 건 예전에 "처형할 때마다 무조건 새로 하나 더 심는" 별도 로직이 있었기
+  // 때문(그 로직은 제거됨).
   const box = [...BOX_SEED, "sacrifice"];
   return { villagers, box };
 }
@@ -154,13 +155,15 @@ export function createVillage(rng) {
 //    (능력 사용과 똑같은 원리). 제물/하수인 유물 자체는 도둑·문제아·취객을 거치며
 //    계속 다른 사람에게 넘어갈 수 있다 — "지금" 누가 위험한지, 처형 성공 여부,
 //    승리 조건 전부 relic 하나로 판정.
-// 제물의 유물은 게임 전체에서 최대 2개까지만 존재한다(createVillage가 유물함에
-// 하나 미리 심어두는 여분 1개 + 처음부터 든 사람 1명). 하수인이 갇히지 않았고
-// 유물함에 그 여분이 남아있으면, deliverBoxSacrifice가 매일 밤 캐스케이드보다
-// 먼저 그걸 다른 사람에게 몰래 심는다 — 그러고 나면 유물함에서 사라지므로 두
-// 번째 이후로는 더 심을 수 없다. 처형된 제물의 유물은 유물함으로 돌아가지
-// 않는다(resolveExecution) — 안 그러면 취객이 다시 뽑아 새 제물이 되는 식으로
-// 무한히 복제되어 이길 수 없는 판이 만들어진다.
+// 제물의 유물은 게임 전체에서 최대 2개까지만 존재한다(처음부터 든 사람 1명 +
+// createVillage가 유물함에 미리 심어두는 여분 1개). 하수인이 갇히지 않았고
+// 유물함에 제물의 유물이 있으면, deliverBoxSacrifice가 매일 밤 캐스케이드보다
+// 먼저 그걸 다른 생존자에게 몰래 심는다(원래 유물은 유물함으로). 처형된 제물의
+// 유물도 다른 유물과 똑같이 유물함으로 돌아가므로(resolveExecution), 하수인이
+// 계속 자유로우면 다음 밤 그 유물이 곧바로 다른 사람에게 다시 심겨 위협이
+// 끊이지 않는다 — 총량 자체는 이 2개뿐이라 늘어나지 않지만, 하수인을 잡기
+// 전까지는 상관없는 처형만으로 절대 끝낼 수 없다. 하수인을 가두는 순간에야
+// deliverBoxSacrifice가 멈추고, 그때 살아있는 나머지(최대 2명)만 처형하면 끝난다.
 // syncPassiveBelief는 캐스케이드가 다 끝난 뒤(그날 밤 최종 relic 기준)에 돈다.
 // belief.day가 오늘이면(=이 밤에 실제로 능동 유물로 행동함, night* 함수들 참고)
 // 그 belief를 절대 안 건드린다 — 진짜로 있었던 일이니까(그 직후 다른 캐스케이드
@@ -531,10 +534,14 @@ export function continueAfterExecution(state) {
 function resolveExecution(state, target, log, villagers, rng) {
   const isRealSacrifice = target.relic === "sacrifice";
   const isMadnessDecoy = target.relic === "madness";
-  // 처형된 제물의 유물은 유물함으로 돌아가지 않는다 — 돌아가면 취객이 다시 뽑아
-  // 새 제물이 되는 식으로 무한히 복제될 수 있다(deliverBoxSacrifice/createVillage의
-  // "최대 2개" 상한과 짝을 이루는 규칙).
-  let box = isRealSacrifice ? [...state.box] : [...state.box, target.relic];
+  // 처형된 유물은 다른 유물과 똑같이 유물함으로 돌아간다 — 제물의 유물도 예외가
+  // 아니다. 총량은 여전히 createVillage가 심어둔 딱 2개(시작 1명 + 유물함 여분
+  // 1개)뿐이라 늘어나지 않는다: deliverBoxSacrifice가 하수인이 자유로운 한 매일
+  // 밤 유물함에 있는 그 토큰을 다른 사람에게 다시 심기 때문에, 처형해도 하수인을
+  // 잡기 전까진 다음 밤 곧바로 새 제물이 나타난다(그래서 하수인을 못 잡으면
+  // 무관한 처형만으로는 절대 못 끝난다) — 하수인을 가두는 순간 이 재분배가 멈추고,
+  // 그때 남아있는 최대 2명만 처형하면 끝난다.
+  let box = [...state.box, target.relic];
 
   if (!isRealSacrifice && !isMadnessDecoy) {
     return {

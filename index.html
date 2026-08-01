@@ -117,10 +117,11 @@
       갇힌 사람은 그동안 자기 유물의 능력을 쓸 수 없습니다.
       의식에 제물의 유물을 몰래 들여온 배신자(하수인)를 가두지 못하면, 유물함에
       제물의 유물이 남아있는 한 매일 밤 시작 전에 다른 사람에게 몰래 하나 더
-      심어놓습니다 — 제물은 한 명이 아닐 수 있습니다. 다만 여분은 하나뿐이라
-      제물의 유물은 게임을 통틀어 최대 2개까지만 존재합니다(처형된 제물의 유물은
-      유물함으로 돌아가지 않습니다) — 배신자만 가두면 그 뒤로는 남은 제물의 유물을
-      찾아 처형하는 것으로 마무리할 수 있습니다.</p>
+      심어놓습니다 — 처형된 제물의 유물도 다시 유물함으로 돌아가 계속 다른
+      사람에게 옮겨 다니므로, 배신자를 못 잡으면 상관없는 처형만으로는 절대
+      끝낼 수 없습니다. 다만 제물의 유물은 게임을 통틀어 최대 2개까지만
+      존재하므로, 배신자만 가두면 그 순간부터 새로 심기는 멈추고 그때 살아있는
+      나머지(최대 2명)만 찾아 처형하는 것으로 마무리할 수 있습니다.</p>
     <p>모든 제물의 유물 소지자를 처형하고 배신자를 가둔 상태로 만들면 의식이 끝나고
       승리합니다. 이레(7일) 안에 끝내지 못해도 실패합니다.</p>
     <button onclick="this.closest('dialog').close()">닫기</button>
@@ -155,11 +156,11 @@
   </dialog>
 
   <script type="module">
-    import { APP_VERSION } from "./js/app-config.js?v=20260731-20";
-    import { mountVersionBadge, mountErrorOverlay } from "./js/devtools.js?v=20260731-20";
-    import { initAudio, startBgm, stopBgm, setEnabled, isEnabled } from "./js/audio.js?v=20260731-20";
-    import { RITUAL } from "./js/palettes.js?v=20260731-20";
-    import "./js/ui.js?v=20260731-20";
+    import { APP_VERSION } from "./js/app-config.js?v=20260731-21";
+    import { mountVersionBadge, mountErrorOverlay } from "./js/devtools.js?v=20260731-21";
+    import { initAudio, startBgm, stopBgm, setEnabled, isEnabled } from "./js/audio.js?v=20260731-21";
+    import { RITUAL } from "./js/palettes.js?v=20260731-21";
+    import "./js/ui.js?v=20260731-21";
 
     mountErrorOverlay(); // 가장 먼저 — 초기화 에러도 잡히게
     mountVersionBadge();

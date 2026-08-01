@@ -129,7 +129,7 @@ export const CLAIM_LINES = {
       ? `저는 결계의 유물이에요. 제 짝은 ${belief.partnerName}${copula(belief.partnerName)}.`
       : "저는 결계의 유물이에요. 짝이 있었을 텐데, 이제 소식을 알 수 없어요.",
   insomniac: (belief, day) =>
-    `${recency(belief, day)} 다들 잠든 뒤에야 제 유물을 확인해봤어요. ${
+    `저는 선잠의 유물이에요. ${recency(belief, day)} 다들 잠든 뒤에 제 유물을 확인해보니 ${
       RELIC_INFO[belief.sawRelic]?.name ?? "알 수 없는 유물"
     }이었어요.`,
   jailed: () => "어젯밤 감옥에 갇혀 있어서 아무것도 할 수 없었어요.",

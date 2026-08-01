@@ -20,7 +20,6 @@ import {
   CORRUPTED_MOOD,
   NERVOUS_MOOD,
   MADNESS_EXECUTION_LINE,
-  SACRIFICE_PLANTED_LINE,
   RITUAL_FAILURE_TEXT,
   TIMEOUT_FAILURE_LINE,
   nightListenLine,
@@ -108,11 +107,18 @@ export function createVillage(rng) {
     // fakeBelief가 대신 쓰이니 눈에 보이지 않는다.
     belief: { role: relic === "sacrifice" || relic === "minion" ? "villager" : relic },
   }));
-  const box = [...BOX_SEED];
+  // 그림자의 유물이 첫 시작에 유물함에 제물의 유물을 하나 미리 심어둔다 — 이게
+  // 유일한 여분이라 제물의 유물은 게임 전체에서 최대 2개(처음 시작한 1명 + 이
+  // 여분 1개)까지만 존재할 수 있다(deliverBoxSacrifice 참고). 처형된 제물의
+  // 유물이 유물함으로 안 돌아가는 것과 짝을 이루는 규칙 — 안 그러면 처형 → 유물함
+  // 복귀 → 취객이 다시 뽑음 → 새 제물이 되는 식으로 무한히 복제될 수 있었다.
+  const box = [...BOX_SEED, "sacrifice"];
   return { villagers, box };
 }
 
-// ── 매일 밤 캐스케이드: 비밀요원 → 천리안 → 도둑 → 문제아 → 취객 (원작 기상 순서) ──
+// ── 매일 밤 캐스케이드: 비밀요원 → 천리안 → 도둑 → 문제아 → 취객 → 불면증환자
+// (불면증환자는 원작에 없던 확장 — 다른 능력이 다 처리된 뒤 맨 마지막에 자기
+// 유물을 확인하므로 그 순서상 맨 뒤에 둔다) ──
 // **누가 그 능력을 쓰는지는 그날 밤 시작 시점의 유물(스냅샷, `actingRelic`)로 딱 한
 // 번 정한다** — 다 같이 동시에 능력을 쓰는 거고, 처리(실제 카드 이동)만 순서대로
 // 하는 거라고 생각하면 된다. 그래서 도둑이 문제아의 유물을 훔쳐가도, 그 도둑은
@@ -147,8 +153,14 @@ export function createVillage(rng) {
 //    안에서 뒤늦게 카드가 오가는 건 반영 안 되고 다음 밤 자기 확인에서야 갱신된다
 //    (능력 사용과 똑같은 원리). 제물/하수인 유물 자체는 도둑·문제아·취객을 거치며
 //    계속 다른 사람에게 넘어갈 수 있다 — "지금" 누가 위험한지, 처형 성공 여부,
-//    승리 조건, 하수인의
-//    제물 심기 자격 전부 relic 하나로 판정.
+//    승리 조건 전부 relic 하나로 판정.
+// 제물의 유물은 게임 전체에서 최대 2개까지만 존재한다(createVillage가 유물함에
+// 하나 미리 심어두는 여분 1개 + 처음부터 든 사람 1명). 하수인이 갇히지 않았고
+// 유물함에 그 여분이 남아있으면, deliverBoxSacrifice가 매일 밤 캐스케이드보다
+// 먼저 그걸 다른 사람에게 몰래 심는다 — 그러고 나면 유물함에서 사라지므로 두
+// 번째 이후로는 더 심을 수 없다. 처형된 제물의 유물은 유물함으로 돌아가지
+// 않는다(resolveExecution) — 안 그러면 취객이 다시 뽑아 새 제물이 되는 식으로
+// 무한히 복제되어 이길 수 없는 판이 만들어진다.
 // syncPassiveBelief는 캐스케이드가 다 끝난 뒤(그날 밤 최종 relic 기준)에 돈다.
 // belief.day가 오늘이면(=이 밤에 실제로 능동 유물로 행동함, night* 함수들 참고)
 // 그 belief를 절대 안 건드린다 — 진짜로 있었던 일이니까(그 직후 다른 캐스케이드
@@ -237,6 +249,40 @@ function nightDrunk(rng, villagers, box, day, actingRelic) {
     drunk.belief = { role: "drunk", day };
     drunk.involvedTonight = true;
   }
+}
+
+// 불면증환자: 원작처럼 그날 밤 맨 마지막(취객 다음)에 깨어 자기 유물을 확인한다 —
+// 그래서 그날 밤 다른 능력들이 다 처리된 뒤의 "진짜 지금" 값을 보게 된다. 그게
+// 제물이나 그림자의 유물이면(방금 확인하고 겁에 질려) 다른 유물을 봤다고 거짓말
+// 하고, 아니면 정확히 뭘 봤는지 그대로 말한다.
+function nightInsomniac(rng, villagers, day, actingRelic) {
+  const insomniacs = villagers.filter((v) => actingRelic.get(v.id) === "insomniac" && v.alive && !v.jailed);
+  for (const v of insomniacs) {
+    const seen = v.relic;
+    const isDangerous = seen === "sacrifice" || seen === "minion";
+    const sawRelic = isDangerous ? pick(rng, HONEST_RELICS.filter((r) => r !== "insomniac")) : seen;
+    v.belief = { role: "insomniac", sawRelic, day };
+    v.involvedTonight = true;
+  }
+}
+
+// 그림자의 유물: 유물함에 제물의 유물이 남아있고 하수인이 자유로우면, 그날 밤이
+// 시작되기 전에(캐스케이드보다 먼저) 무작위로 한 명을 골라 그 제물의 유물을
+// 몰래 넘긴다(원래 유물은 유물함으로). createVillage가 게임 시작 시 유물함에
+// 제물의 유물을 하나 미리 넣어두므로, 이게 유일한 여분이라 제물의 유물은 게임
+// 전체에서 최대 2개까지만 존재할 수 있다 — 한 번 다 쓰이면(유물함에서 사라지면)
+// 다시는 새 제물이 생기지 않는다.
+function deliverBoxSacrifice(rng, villagers, box) {
+  const idx = box.indexOf("sacrifice");
+  if (idx === -1) return;
+  const minion = villagers.find((v) => v.relic === "minion" && v.alive);
+  if (!minion || minion.jailed) return; // 하수인이 갇혀있으면 심을 수 없다
+  const candidates = villagers.filter((v) => v.alive && !v.jailed && v.relic !== "sacrifice" && v.id !== minion.id);
+  if (candidates.length === 0) return;
+  box.splice(idx, 1);
+  const chosen = pick(rng, candidates);
+  box.push(chosen.relic);
+  chosen.relic = "sacrifice";
 }
 
 // 제물/하수인도 평범/광기와 마찬가지로 매일 밤 시작할 때 자기 유물을 스스로
@@ -332,6 +378,11 @@ function runNightPhase(state, rng) {
   const villagers = state.villagers.map((v) => ({ ...v, involvedTonight: false }));
   const box = [...state.box];
 
+  // 그림자의 유물: 캐스케이드보다 먼저, 유물함에 남은 제물의 유물을 그날 밤
+  // 시작 전에 몰래 심는다 — 이 시점의 결과가 곧바로 아래 actingRelic 스냅샷에
+  // 반영되어야 그날 밤 "누가 위협인가" 판정과 낮 거짓말에 제대로 걸린다.
+  deliverBoxSacrifice(rng, villagers, box);
+
   // 그날 밤 시작 시점의 유물 스냅샷 — "누가 그 능력을 쓰는가"뿐 아니라 "누가 오늘
   // 위협인 줄 알고 거짓말하는가"(isThreat/refreshFakeBeliefs)도 이 스냅샷 하나로
   // 고정한다(다 같이 동시에 자기 유물을 확인하고, 카드 이동 처리만 순서대로 하는
@@ -343,6 +394,10 @@ function runNightPhase(state, rng) {
   nightRobber(rng, villagers, state.day, actingRelic);
   nightTroublemaker(rng, villagers, state.day, actingRelic);
   nightDrunk(rng, villagers, box, state.day, actingRelic);
+  // 불면증환자: "누가 불면증환자인가"는 여느 능력처럼 actingRelic 스냅샷으로
+  // 정하지만, 다른 능력이 다 끝난 뒤 맨 마지막에 깨어 확인하는 값 자체는 그날 밤
+  // 최종(실시간) relic이다.
+  nightInsomniac(rng, villagers, state.day, actingRelic);
   // 캐스케이드가 다 끝난 뒤(그날 밤 최종 relic 기준)에 돈다 — 그래야 밤중에
   // 능동 유물을 뺏겨 평범/광기가 된 사람(원래 제물/하수인이었던 사람 포함)도
   // 놓치지 않고 잡아낸다. 그날 밤 실제로 행동한 사람(belief.day === 오늘)은
@@ -476,7 +531,10 @@ export function continueAfterExecution(state) {
 function resolveExecution(state, target, log, villagers, rng) {
   const isRealSacrifice = target.relic === "sacrifice";
   const isMadnessDecoy = target.relic === "madness";
-  let box = [...state.box, target.relic];
+  // 처형된 제물의 유물은 유물함으로 돌아가지 않는다 — 돌아가면 취객이 다시 뽑아
+  // 새 제물이 되는 식으로 무한히 복제될 수 있다(deliverBoxSacrifice/createVillage의
+  // "최대 2개" 상한과 짝을 이루는 규칙).
+  let box = isRealSacrifice ? [...state.box] : [...state.box, target.relic];
 
   if (!isRealSacrifice && !isMadnessDecoy) {
     return {
@@ -495,19 +553,10 @@ function resolveExecution(state, target, log, villagers, rng) {
     log.push({ day: state.day, phase: "day", text: MADNESS_EXECUTION_LINE });
   }
 
-  // 하수인이 갇히지 않았다면, 이 처형이 진짜든 위장이든 그 틈을 타 제물을 하나 더 심는다.
+  // 승리 조건은 여전히 "하수인이 갇혀있거나 죽었는가"를 본다 — 제물을 새로 심는
+  // 것은 이제 처형 시점이 아니라 매일 밤 시작 전 deliverBoxSacrifice가 맡는다.
   const minion = villagers.find((v) => v.relic === "minion" && v.alive);
   const minionContained = !minion || minion.jailed;
-
-  if (!minionContained) {
-    const candidates = villagers.filter((v) => v.alive && v.relic !== "sacrifice" && v.id !== minion.id);
-    if (candidates.length > 0) {
-      const chosen = pick(rng, candidates);
-      box = [...box, chosen.relic];
-      villagers = villagers.map((v) => (v.id === chosen.id ? { ...v, relic: "sacrifice" } : v));
-      log.push({ day: state.day, phase: "day", text: SACRIFICE_PLANTED_LINE });
-    }
-  }
 
   const remainingSacrifices = villagers.filter((v) => v.alive && v.relic === "sacrifice").length;
 

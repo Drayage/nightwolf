@@ -38,17 +38,21 @@ export const RELIC_INFO = {
   },
   madness: {
     name: "광기의 유물",
-    description:
-      "처형되면 의식이 끝난 것처럼 보인다 — 하지만 그건 착각이다. 그 틈에 하수인이 다른 사람에게 제물의 유물을 하나 더 심어놓을 수 있다.",
+    description: "처형되면 의식이 끝난 것처럼 보인다 — 하지만 그건 착각이다. 장로는 그 실패를 느끼지 못한다.",
   },
   mason: {
     name: "결계의 유물",
     description: "짝이 되는 유물이 마을에 하나 더 있다. 서로의 정체를 알고 있다.",
   },
+  insomniac: {
+    name: "불면증환자의 유물",
+    description:
+      "밤새 뒤척이다 모든 일이 끝난 뒤에야 자기 유물을 확인한다. 그게 제물이나 그림자의 유물이면 겁에 질려 거짓말한다.",
+  },
   minion: {
     name: "그림자의 유물",
     description:
-      "의식에 제물의 유물을 몰래 들여온 배신자. 갇히지 않으면, 처형이 있을 때마다(진짜든 광기의 유물이든) 다른 사람에게 제물의 유물을 하나 더 심을 수 있다.",
+      "의식에 제물의 유물을 몰래 들여온 배신자. 갇히지 않으면, 유물함에 제물의 유물이 남아있는 한 매일 밤 시작 전에 그것을 다른 사람에게 몰래 심는다 — 게임 시작할 때 유물함에 미리 하나 들어있는 게 유일한 여분이라, 제물의 유물은 전체 게임을 통틀어 최대 2개까지만 존재한다.",
   },
   sacrifice: {
     name: "제물의 유물",
@@ -57,7 +61,7 @@ export const RELIC_INFO = {
 };
 
 // 진짜 정체를 감출 때 사칭 대상이 될 수 있는 "진짜" 유물들 (제물/하수인 제외).
-export const HONEST_RELICS = ["villager", "seer", "robber", "troublemaker", "drunk", "madness", "mason"];
+export const HONEST_RELICS = ["villager", "seer", "robber", "troublemaker", "drunk", "madness", "mason", "insomniac"];
 
 // 예지의 유물이 (진짜든 사칭이든) "봤다"고 말할 수 있는 유물 전체 — 제물/하수인도 포함.
 export const ALL_RELICS = [...HONEST_RELICS, "sacrifice", "minion"];
@@ -67,13 +71,13 @@ export const VILLAGE_SIZE = 11;
 // 마을 구성은 매 런 무작위다 — 제물/하수인만 정확히 1명씩 고정이고, 나머지는 겹치거나
 // 아예 안 나올 수도 있다(결계만 예외: 항상 짝수 명). js/engine.js의 generateRelicLayout
 // 참고. 정원(ROLE_SLOTS)은 더 이상 "항상 1명"을 보장하지 않는, 그저 봇 추리용 기본값이다.
-export const DUPLICATABLE_RELICS = ["seer", "robber", "troublemaker", "drunk", "madness", "villager"];
+export const DUPLICATABLE_RELICS = ["seer", "robber", "troublemaker", "drunk", "madness", "villager", "insomniac"];
 export const MASON_COUNT_WEIGHTS = [
   [0, 1],
   [2, 6],
   [4, 1],
 ];
-export const ROLE_SLOTS = { seer: 1, robber: 1, troublemaker: 1, drunk: 1, madness: 1, mason: 2 };
+export const ROLE_SLOTS = { seer: 1, robber: 1, troublemaker: 1, drunk: 1, madness: 1, mason: 2, insomniac: 1 };
 
 // 유물함(중앙 유물 풀)의 초기 여분 — 원작의 "인원수+3장" 관례를 따른다.
 export const BOX_SEED = ["villager", "villager", "villager"];
@@ -95,9 +99,9 @@ export const copula = (word) => (hasBatchim(word) ? "이에요" : "예요");
 
 // 낮 증언: 유물은 주머니 속에 있어 아무도 "지금" 자기가 뭔지 모른다. 다들 자기가
 // 한 행동(혹은 계속 같은 자기 인식)을 말할 뿐이다 — 그래서 말하는 유물과 지금 실제로
-// 들고 있는 유물이 다를 수 있다. 능동적으로 뭔가를 "한" 유물(예지/도둑/문제아/취객)은
-// 과거형으로, 그냥 "그런 사람"인 유물(평범/결계/광기)은 현재형으로 쓴다.
-// belief: { role, targetName, targetName2, targetRelic, partnerName, swappedWithName, day }
+// 들고 있는 유물이 다를 수 있다. 능동적으로 뭔가를 "한" 유물(예지/도둑/문제아/취객/
+// 불면증환자)은 과거형으로, 그냥 "그런 사람"인 유물(평범/결계/광기)은 현재형으로 쓴다.
+// belief: { role, targetName, targetName2, targetRelic, partnerName, swappedWithName, sawRelic, day }
 // belief.day가 오늘과 다르면 며칠 전에 굳어버린 오래된 belief라는 뜻(도둑/문제아한테
 // 유물을 뺏긴 뒤로 그 능력을 다시 쓴 적이 없는 경우) — "어젯밤"이라고 하면 그날 밤
 // 다른 증거(예: 예지가 정확히 지금 유물을 봤다는 진술)와 앞뒤가 안 맞으므로 구분해서
@@ -124,6 +128,10 @@ export const CLAIM_LINES = {
     belief.partnerName
       ? `저는 결계의 유물이에요. 제 짝은 ${belief.partnerName}${copula(belief.partnerName)}.`
       : "저는 결계의 유물이에요. 짝이 있었을 텐데, 이제 소식을 알 수 없어요.",
+  insomniac: (belief, day) =>
+    `${recency(belief, day)} 다들 잠든 뒤에야 제 유물을 확인해봤어요. ${
+      RELIC_INFO[belief.sawRelic]?.name ?? "알 수 없는 유물"
+    }이었어요.`,
   jailed: () => "어젯밤 감옥에 갇혀 있어서 아무것도 할 수 없었어요.",
 };
 
@@ -146,8 +154,6 @@ export const NERVOUS_MOOD = [
 // (장로에게는 진짜와 구분되지 않는다. 하수인이 자유로우면 이 틈에 새 제물을 심는다.)
 export const MADNESS_EXECUTION_LINE =
   "광기의 유물이 산산이 부서지며 낮은 웃음소리 같은 게 새어 나온다. 의식이 끝난 듯한 이상한 안도감이 마을을 감돈다...";
-
-export const SACRIFICE_PLANTED_LINE = "어둠 속에서 하수인이 또 다른 이에게 제물의 유물을 몰래 심어놓았다...";
 
 // 잘못된 제물을 바쳤을 때: 결과가 바로 뜨지 않고 이 대사들이 순서대로 흐른 뒤 결말로 넘어간다.
 export const RITUAL_FAILURE_TEXT = [

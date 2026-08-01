@@ -117,9 +117,9 @@ export function createVillage(rng) {
   return { villagers, box };
 }
 
-// ── 매일 밤 캐스케이드: 비밀요원 → 천리안 → 도둑 → 문제아 → 취객 → 불면증환자
-// (불면증환자는 원작에 없던 확장 — 다른 능력이 다 처리된 뒤 맨 마지막에 자기
-// 유물을 확인하므로 그 순서상 맨 뒤에 둔다) ──
+// ── 매일 밤 캐스케이드: 비밀요원 → 천리안 → 도둑 → 문제아 → 취객 → 선잠의 유물
+// (선잠의 유물은 원작 "불면증환자" 확장 — 다른 능력이 다 처리된 뒤 맨 마지막에
+// 자기 유물을 확인하므로 그 순서상 맨 뒤에 둔다) ──
 // **누가 그 능력을 쓰는지는 그날 밤 시작 시점의 유물(스냅샷, `actingRelic`)로 딱 한
 // 번 정한다** — 다 같이 동시에 능력을 쓰는 거고, 처리(실제 카드 이동)만 순서대로
 // 하는 거라고 생각하면 된다. 그래서 도둑이 문제아의 유물을 훔쳐가도, 그 도둑은
@@ -254,10 +254,10 @@ function nightDrunk(rng, villagers, box, day, actingRelic) {
   }
 }
 
-// 불면증환자: 원작처럼 그날 밤 맨 마지막(취객 다음)에 깨어 자기 유물을 확인한다 —
-// 그래서 그날 밤 다른 능력들이 다 처리된 뒤의 "진짜 지금" 값을 보게 된다. 그게
-// 제물이나 그림자의 유물이면(방금 확인하고 겁에 질려) 다른 유물을 봤다고 거짓말
-// 하고, 아니면 정확히 뭘 봤는지 그대로 말한다.
+// 선잠의 유물: 원작 "불면증환자"처럼 그날 밤 맨 마지막(취객 다음)에 깨어 자기
+// 유물을 확인한다 — 그래서 그날 밤 다른 능력들이 다 처리된 뒤의 "진짜 지금"
+// 값을 보게 된다. 그게 제물이나 그림자의 유물이면(방금 확인하고 겁에 질려)
+// 다른 유물을 봤다고 거짓말하고, 아니면 정확히 뭘 봤는지 그대로 말한다.
 function nightInsomniac(rng, villagers, day, actingRelic) {
   const insomniacs = villagers.filter((v) => actingRelic.get(v.id) === "insomniac" && v.alive && !v.jailed);
   for (const v of insomniacs) {
@@ -397,7 +397,7 @@ function runNightPhase(state, rng) {
   nightRobber(rng, villagers, state.day, actingRelic);
   nightTroublemaker(rng, villagers, state.day, actingRelic);
   nightDrunk(rng, villagers, box, state.day, actingRelic);
-  // 불면증환자: "누가 불면증환자인가"는 여느 능력처럼 actingRelic 스냅샷으로
+  // 선잠의 유물: "누가 선잠의 유물인가"는 여느 능력처럼 actingRelic 스냅샷으로
   // 정하지만, 다른 능력이 다 끝난 뒤 맨 마지막에 깨어 확인하는 값 자체는 그날 밤
   // 최종(실시간) relic이다.
   nightInsomniac(rng, villagers, state.day, actingRelic);

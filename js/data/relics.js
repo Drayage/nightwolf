@@ -45,7 +45,7 @@ export const RELIC_INFO = {
     description: "짝이 되는 유물이 마을에 하나 더 있다. 서로의 정체를 알고 있다.",
   },
   insomniac: {
-    name: "불면증환자의 유물",
+    name: "선잠의 유물",
     description:
       "밤새 뒤척이다 모든 일이 끝난 뒤에야 자기 유물을 확인한다. 그게 제물이나 그림자의 유물이면 겁에 질려 거짓말한다.",
   },

@@ -241,8 +241,17 @@ function renderEnd() {
     }
     if (state.revealTable) {
       children.push(
-        el("table", { class: "reveal-table" }, [
-          el("thead", {}, el("tr", {}, [el("th", {}, "이름"), el("th", {}, "시작 유물"), el("th", {}, "마지막 유물")])),
+        el("div", { class: "reveal-table-wrap" }, el("table", { class: "reveal-table" }, [
+          el(
+            "thead",
+            {},
+            el("tr", {}, [
+              el("th", {}, "이름"),
+              el("th", {}, "처음 시작 유물"),
+              el("th", {}, "오늘 밤 시작 유물"),
+              el("th", {}, "마지막 유물"),
+            ])
+          ),
           el(
             "tbody",
             {},
@@ -250,11 +259,12 @@ function renderEnd() {
               el("tr", {}, [
                 el("td", {}, row.name),
                 el("td", {}, RELIC_INFO[row.startingRelic]?.name ?? row.startingRelic),
+                el("td", {}, RELIC_INFO[row.tonightStartRelic]?.name ?? row.tonightStartRelic),
                 el("td", {}, RELIC_INFO[row.endingRelic]?.name ?? row.endingRelic),
               ])
             )
           ),
-        ])
+        ]))
       );
     }
   }

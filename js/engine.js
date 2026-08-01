@@ -139,12 +139,15 @@ export function createVillage(rng) {
 //  - 평범/광기처럼 아무 능력도 없는 유물은 숨길 것도 없으니 그냥 "확인한 그대로"
 //    믿는다(`syncPassiveBelief`) — 도둑/문제아한테 능동 유물을 뺏겨 평범/광기가
 //    된 사람은 바로 다음 날부터 정확히 그렇게 말한다.
-//  - **제물/하수인도 마찬가지다.** 그 유물을 얼떨결에 넘겨받은 사람은 그날 밤
+//  - **제물/하수인도 마찬가지다.** `isThreat()`가 startingRelic이 아니라 그날 밤
+//    시작 시점의 유물(`actingRelic`)을 본다 — 그 유물을 넘겨받은 사람은 그날 밤
 //    확인하는 순간 "헉, 내가 제물?"하며 그때부터 거짓말을 시작하고(`fakeBelief`),
 //    반대로 도둑/문제아한테 그 유물을 뺏긴 사람은 "나 이제 아니네" 하고 안심하며
-//    다시 진실을 말한다(`isThreat()`가 v.relic을 그대로 봄 — startingRelic이
-//    아님). 제물/하수인 유물 자체는 도둑·문제아·취객을 거치며 계속 다른 사람에게
-//    넘어갈 수 있다 — "지금" 누가 위험한지, 처형 성공 여부, 승리 조건, 하수인의
+//    다시 진실을 말한다 — 단, 이 판정은 밤 시작 시점 스냅샷 기준이라 그날 밤
+//    안에서 뒤늦게 카드가 오가는 건 반영 안 되고 다음 밤 자기 확인에서야 갱신된다
+//    (능력 사용과 똑같은 원리). 제물/하수인 유물 자체는 도둑·문제아·취객을 거치며
+//    계속 다른 사람에게 넘어갈 수 있다 — "지금" 누가 위험한지, 처형 성공 여부,
+//    승리 조건, 하수인의
 //    제물 심기 자격 전부 relic 하나로 판정.
 // syncPassiveBelief는 캐스케이드가 다 끝난 뒤(그날 밤 최종 relic 기준)에 돈다.
 // belief.day가 오늘이면(=이 밤에 실제로 능동 유물로 행동함, night* 함수들 참고)
@@ -236,25 +239,27 @@ function nightDrunk(rng, villagers, box, day, actingRelic) {
   }
 }
 
-// 제물/하수인도 평범/광기와 마찬가지로 매일 밤 자기 유물을 스스로 확인하고 들어간다
-// (syncPassiveBelief와 같은 원리 — 유물은 유지되지만 belief는 매일 밤 새로 생긴다).
-// 그래서 도둑/문제아한테 그 유물을 뺏기면 바로 다음 날부터 "나 이제 제물 아니네"
-// 하고 안심하며 진실을 말하고(isThreat() 참고 — v.relic 기준), 반대로 얼떨결에
-// 그 유물을 받은 사람은 그날 밤 확인하고서야 "헉, 내가 제물?" 하고 그 순간부터
-// 거짓말을 시작한다. claimRole(사칭 대상)만 한 번 정해지면 안 바뀐다 — 매일 같은
-// 거짓말쟁이 정체를 유지해야 앞뒤가 맞으니까. 사칭의 "구체적 근거"(누굴 봤다,
-// 누구랑 바꿨다 등)는 매일 밤 새로 지어낸다 — 진짜 능력이 있는 척하려면 매일
-// 그럴듯한 최신 정보를 대야 하기 때문이다(로버만 예외 — 원래도 "모른다"가
-// 정답이라 지어낼 필요가 없다).
-function refreshFakeBeliefs(rng, villagers, box, day) {
+// 제물/하수인도 평범/광기와 마찬가지로 매일 밤 시작할 때 자기 유물을 스스로
+// 확인하고 그 밤에 들어간다 — 능력 사용(actingRelic)과 똑같은 스냅샷 기준이다.
+// 그래서 밤사이 도둑/문제아한테 그 유물을 늦게 뺏겨도 본인은 그날 밤 시작할 때
+// 확인한 대로("나는 위험하다") 그날은 계속 거짓말하고, 다음 밤에 다시 확인해야
+// 비로소 "나 이제 아니네" 하며 안심한다(반대로 얼떨결에 그 유물을 늦게 넘겨받은
+// 쪽은 그날 밤 시작 시점엔 무해했으니 그날은 태연히 진실을 말하고, 다음 밤 자기
+// 확인에서야 "헉, 내가 제물?" 하며 거짓말을 시작한다). claimRole(사칭 대상)만
+// 한 번 정해지면 안 바뀐다 — 매일 같은 거짓말쟁이 정체를 유지해야 앞뒤가 맞으니까.
+// 사칭의 "구체적 근거"(누굴 봤다, 누구랑 바꿨다 등)는 매일 밤 새로 지어낸다 —
+// 진짜 능력이 있는 척하려면 매일 그럴듯한 최신 정보를 대야 하기 때문이다(로버만
+// 예외 — 원래도 "모른다"가 정답이라 지어낼 필요가 없다).
+function refreshFakeBeliefs(rng, villagers, box, day, actingRelic) {
   const honestPresent = [...new Set(villagers.map((v) => v.relic))].filter((r) => HONEST_RELICS.includes(r));
   const villagerPool = honestPresent.length > 0 ? honestPresent : ["villager"];
   const boxPool = [...new Set(box)].filter((r) => HONEST_RELICS.includes(r));
   const minionPool = boxPool.length > 0 ? boxPool : ["villager"];
 
   for (const v of villagers) {
-    if (v.relic !== "sacrifice" && v.relic !== "minion") continue;
-    if (!v.claimRole) v.claimRole = pick(rng, v.relic === "sacrifice" ? villagerPool : minionPool);
+    const startedTonightAs = actingRelic.get(v.id);
+    if (startedTonightAs !== "sacrifice" && startedTonightAs !== "minion") continue;
+    if (!v.claimRole) v.claimRole = pick(rng, startedTonightAs === "sacrifice" ? villagerPool : minionPool);
 
     const role = v.claimRole;
     const others = villagers.filter((o) => o.alive && o.id !== v.id);
@@ -280,19 +285,20 @@ function refreshFakeBeliefs(rng, villagers, box, day) {
   }
 }
 
-// 거짓말 여부도 지금 실제로 뭘 들고 있는지(v.relic)로 정한다 — 매일 밤 자기 유물을
-// 스스로 확인하고 들어가기 때문에(refreshFakeBeliefs 참고), "원래" 뭐였는지는
-// 상관없다.
-function isThreat(v) {
-  return v.relic === "sacrifice" || v.relic === "minion";
+// 거짓말 여부는 "그날 밤 시작할 때 확인한" 유물(actingRelic 스냅샷)로 정한다 —
+// 능력 사용과 완전히 같은 기준이다. 밤중에 뒤늦게 그 유물을 얻거나 잃어도 그날은
+// 아직 모른다(다음 밤 자기 확인에서야 알게 됨).
+function isThreat(v, actingRelic) {
+  const startedTonightAs = actingRelic.get(v.id);
+  return startedTonightAs === "sacrifice" || startedTonightAs === "minion";
 }
 
 // 낮 증언 한 줄 — belief(또는 사칭이면 fakeBelief)를 그대로 문장으로 옮긴다.
 // 같은 유물을 주장하는 사람이 정원(ROLE_SLOTS)보다 많으면 그 자체가 추궁 단서.
 // 갇혀 있던 사람은 애초에 어젯밤 아무 능력도 못 썼으니(사칭이든 진짜든) belief를
 // 참고할 필요 없이 갇혀 있었다는 사실 그대로만 말한다.
-function buildPendingClaim(rng, speaker, day) {
-  const threat = !speaker.jailed && isThreat(speaker);
+function buildPendingClaim(rng, speaker, day, actingRelic) {
+  const threat = !speaker.jailed && isThreat(speaker, actingRelic);
   const belief = speaker.jailed ? { role: "jailed" } : threat ? speaker.fakeBelief : speaker.belief;
   if (!belief) return null;
 
@@ -326,8 +332,10 @@ function runNightPhase(state, rng) {
   const villagers = state.villagers.map((v) => ({ ...v, involvedTonight: false }));
   const box = [...state.box];
 
-  // 그날 밤 시작 시점의 유물 스냅샷 — "누가 그 능력을 쓰는가"는 이 스냅샷 하나로
-  // 고정한다(다 같이 동시에 능력을 쓰고, 카드 이동 처리만 순서대로 하는 것).
+  // 그날 밤 시작 시점의 유물 스냅샷 — "누가 그 능력을 쓰는가"뿐 아니라 "누가 오늘
+  // 위협인 줄 알고 거짓말하는가"(isThreat/refreshFakeBeliefs)도 이 스냅샷 하나로
+  // 고정한다(다 같이 동시에 자기 유물을 확인하고, 카드 이동 처리만 순서대로 하는
+  // 것 — 다음 밤이 되면 이 스냅샷은 버려지고 새로 뜬다).
   const actingRelic = new Map(villagers.map((v) => [v.id, v.relic]));
 
   nightMason(villagers, actingRelic, state.day);
@@ -340,17 +348,20 @@ function runNightPhase(state, rng) {
   // 놓치지 않고 잡아낸다. 그날 밤 실제로 행동한 사람(belief.day === 오늘)은
   // 절대 안 건드린다.
   syncPassiveBelief(villagers, state.day);
-  refreshFakeBeliefs(rng, villagers, box, state.day);
+  refreshFakeBeliefs(rng, villagers, box, state.day, actingRelic);
 
   const pendingClaims = [];
   for (const speaker of villagers.filter((v) => v.alive)) {
-    const claim = buildPendingClaim(rng, speaker, state.day);
+    const claim = buildPendingClaim(rng, speaker, state.day, actingRelic);
     if (claim) pendingClaims.push({ day: state.day, ...claim });
   }
 
   const nightInvolvement = villagers.filter((v) => v.alive && v.involvedTonight).map((v) => v.id);
+  // 결말 공개용 표에 "오늘 밤 시작 유물" 열을 보여주려고 저장해둔다 — localStorage에
+  // 그대로 저장돼야 하므로 Map이 아니라 평범한 객체로 직렬화한다.
+  const nightStartRelic = Object.fromEntries(actingRelic);
 
-  return { ...state, villagers, box, phase: "night", pendingClaims, nightInvolvement, nightListenedId: null, log };
+  return { ...state, villagers, box, phase: "night", pendingClaims, nightInvolvement, nightListenedId: null, log, nightStartRelic };
 }
 
 // 밤에 딱 한 사람에게만 귀 기울일 수 있다 — 한 번 고르면 그날 밤은 그걸로 끝.
@@ -424,8 +435,17 @@ export function release(state, id) {
   };
 }
 
-function buildRevealTable(villagers) {
-  return villagers.map((v) => ({ id: v.id, name: v.name, startingRelic: v.startingRelic, endingRelic: v.relic }));
+// 처음 시작 유물 / 그날 밤(마지막으로 처리된 밤) 시작 유물 / 최종 유물 — 3열을
+// 다 보여줘야 로그와 대조해서 "이상한 게 있으면" 바로 찾을 수 있다. 가운데 열이
+// actingRelic 스냅샷 그대로다 — 능력 사용/거짓말 판정이 정확히 이 값 기준이었다.
+function buildRevealTable(villagers, nightStartRelic) {
+  return villagers.map((v) => ({
+    id: v.id,
+    name: v.name,
+    startingRelic: v.startingRelic,
+    tonightStartRelic: nightStartRelic?.[v.id] ?? v.startingRelic,
+    endingRelic: v.relic,
+  }));
 }
 
 // 처형은 두 단계다: execute()는 "처형했다"만 보여주고 결과를 pendingResolution에
@@ -466,7 +486,7 @@ function resolveExecution(state, target, log, villagers, rng) {
       log: [...log, ...RITUAL_FAILURE_TEXT.map((text) => ({ day: state.day, phase: "ending", text }))],
       status: "lost",
       lossReason: "잘못된 제물을 바쳐 의식이 실패했습니다.",
-      revealTable: buildRevealTable(villagers),
+      revealTable: buildRevealTable(villagers, state.nightStartRelic),
     };
   }
 
@@ -509,7 +529,7 @@ function resolveExecution(state, target, log, villagers, rng) {
       log: [...log, { day: state.day, phase: "day", text: TIMEOUT_FAILURE_LINE }],
       status: "lost",
       lossReason: "기한 내에 제물을 모두 막지 못했습니다.",
-      revealTable: buildRevealTable(villagers),
+      revealTable: buildRevealTable(villagers, state.nightStartRelic),
     };
   }
 

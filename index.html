@@ -81,7 +81,8 @@
     button.villager-card.night-card:active { background: #26222c; border-color: #4a4256; }
     button.villager-card.night-card-disabled { opacity: 0.4; cursor: default; }
 
-    .reveal-table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 13px; }
+    .reveal-table-wrap { width: 100%; overflow-x: auto; margin-top: 12px; }
+    .reveal-table { border-collapse: collapse; font-size: 12px; white-space: nowrap; }
     .reveal-table th, .reveal-table td { border-bottom: 1px solid #2c2732; padding: 6px 8px; text-align: left; }
     .reveal-table th { color: #8b8b9a; font-weight: 500; }
 
@@ -151,11 +152,11 @@
   </dialog>
 
   <script type="module">
-    import { APP_VERSION } from "./js/app-config.js?v=20260731-18";
-    import { mountVersionBadge, mountErrorOverlay } from "./js/devtools.js?v=20260731-18";
-    import { initAudio, startBgm, stopBgm, setEnabled, isEnabled } from "./js/audio.js?v=20260731-18";
-    import { RITUAL } from "./js/palettes.js?v=20260731-18";
-    import "./js/ui.js?v=20260731-18";
+    import { APP_VERSION } from "./js/app-config.js?v=20260731-19";
+    import { mountVersionBadge, mountErrorOverlay } from "./js/devtools.js?v=20260731-19";
+    import { initAudio, startBgm, stopBgm, setEnabled, isEnabled } from "./js/audio.js?v=20260731-19";
+    import { RITUAL } from "./js/palettes.js?v=20260731-19";
+    import "./js/ui.js?v=20260731-19";
 
     mountErrorOverlay(); // 가장 먼저 — 초기화 에러도 잡히게
     mountVersionBadge();

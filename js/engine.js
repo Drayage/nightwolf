@@ -333,6 +333,10 @@ function refreshFakeBeliefs(rng, villagers, box, day, actingRelic) {
       }
     } else if (role === "mason") {
       if (others.length > 0) fake.partnerName = pick(rng, others).name;
+    } else if (role === "insomniac") {
+      // 진짜 선잠의 유물이 위협을 보고 겁에 질려 거짓말할 때와 똑같은 논리 —
+      // 안전한 유물을 봤다고 지어낸다(nightInsomniac의 isDangerous 분기 참고).
+      fake.sawRelic = pick(rng, HONEST_RELICS.filter((r) => r !== "insomniac"));
     }
     v.fakeBelief = fake;
   }

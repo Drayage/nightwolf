@@ -88,6 +88,19 @@
 **갇힌 사람은 전부 스킵** — 모든 `night*` 함수가 `!v.jailed`로 걸러냄. 능력도
 못 쓰고 남의 능력의 대상도 못 됨.
 
+### 4-1. 함정: `refreshFakeBeliefs`도 `HONEST_RELICS`의 모든 항목을 다 처리해야 함
+
+`refreshFakeBeliefs`가 제물/하수인의 `claimRole`(사칭 대상)을 `HONEST_RELICS`에서
+무작위로 뽑는다 — 즉 **선잠의 유물을 포함해서 어떤 정직한 유물이든 거짓 정체로
+뽑힐 수 있다.** 근데 `fake` 객체에 그 역할별 세부 필드(예: 예지의 `targetRelic`,
+문제아의 `targetName`/`targetName2`, 결계의 `partnerName`, 선잠의 `sawRelic`)를
+채워주는 `if (role === "...")` 분기가 `HONEST_RELICS`의 항목 수만큼 다 있어야
+한다. 하나라도 빠지면 그 필드가 `undefined`인 채로 `CLAIM_LINES`에 넘어가서
+"알 수 없는 유물이었어요" 같은 깨진 대사가 나온다(실제로 선잠의 유물 분기를
+빠뜨렸다가 8000여 건에서 100% 재현된 적 있음 — `sawRelic` 채우는 분기 추가로
+수정됨). **새 능동 유물을 추가할 때마다 `night*` 함수뿐 아니라
+`refreshFakeBeliefs`에도 그 유물용 분기를 반드시 같이 추가할 것.**
+
 ## 5. `syncPassiveBelief` — 스냅샷 기준 (실시간 relic 아님!)
 
 ```js

@@ -185,6 +185,26 @@ function syncPassiveBelief(villagers, day, actingRelic) {
   }
 }
 
+// 밤중에 스왑으로 얼떨결에 처음 제물/하수인이 된 사람은, 사기칠 때(refreshFakeBeliefs)
+// 무작위 풀에서 아무거나 고르지 않고 "바로 직전까지 진짜로 들고 있던 유물"을 그대로
+// 쓴다 — 실제로 겪은 정체라 훨씬 자연스럽다. 이미 사칭 대상(claimRole)이 정해져
+// 있으면 절대 안 건드린다(claimRole은 한 번 정해지면 안 바뀌는 게 원칙 — 예전에
+// 위협이었다가 안전해진 뒤 다시 위협이 된 경우, 예전 사칭을 그대로 이어간다).
+// 처음부터 제물/하수인으로 게임을 시작한 딱 2명(generateRelicLayout이 직접 배정)
+// 은 "그 전에 들고 있던 진짜 유물"이라는 게 아예 없으므로 여기 안 걸리고,
+// refreshFakeBeliefs의 무작위 풀 뽑기로만 claimRole이 정해진다.
+function lockClaimRoleIfNewThreat(v, previousRelic) {
+  // 두 위협(제물↔제물, 제물↔하수인)끼리 서로 자리를 바꾼 경우 previousRelic 자체가
+  // sacrifice/minion이라 그대로는 유효한 사칭 대상이 아니다 — 이럴 땐 안전한 진짜
+  // 이전 정체가 없다는 뜻이므로 잠그지 않고 refreshFakeBeliefs의 무작위 풀 기본값에
+  // 맡긴다.
+  const wasThreatBefore = previousRelic === "sacrifice" || previousRelic === "minion";
+  const isThreatNow = v.relic === "sacrifice" || v.relic === "minion";
+  if (!v.claimRole && !wasThreatBefore && isThreatNow) {
+    v.claimRole = previousRelic;
+  }
+}
+
 function nightMason(villagers, actingRelic, day) {
   const masons = villagers.filter((v) => actingRelic.get(v.id) === "mason" && v.alive && !v.jailed);
   for (let i = 0; i + 1 < masons.length; i += 2) {
@@ -218,12 +238,16 @@ function nightRobber(rng, villagers, day, actingRelic) {
   for (const robber of robbers) {
     // 갇힌 사람은 격리돼 있어 남의 능력의 대상도 될 수 없다 — 훔쳐볼 수도, 훔쳐갈 수도 없음.
     // 제물/하수인 유물 자체는 여기서도 다른 유물과 똑같이 훔칠 수 있다(누가 지금
-    // 위험한지는 여전히 relic이 정한다) — 다만 그렇게 훔쳐간 사람은 거짓말은 안
-    // 한다(아래 isThreat 참고: 거짓말 여부는 그날 밤 최종 relic 기준).
+    // 위험한지는 여전히 relic이 정한다) — 다만 그렇게 훔쳐간 사람은 오늘 당장
+    // 거짓말은 안 한다(isThreat는 그날 밤 시작 시점 스냅샷 기준이라 다음 밤부터 반영).
     const others = villagers.filter((v) => v.alive && !v.jailed && v.id !== robber.id);
     if (others.length === 0) continue;
     const target = pick(rng, others);
+    const robberOld = robber.relic;
+    const targetOld = target.relic;
     [robber.relic, target.relic] = [target.relic, robber.relic];
+    lockClaimRoleIfNewThreat(robber, robberOld);
+    lockClaimRoleIfNewThreat(target, targetOld);
     // robber는 누구와 바꿨는지는 알지만(주머니 밖 행동), 뭘 받았는지는 안을 안 봐서 모른다.
     // target은 자기 유물이 바뀐 줄도 모른다 — belief 그대로 둔다.
     robber.belief = { role: "robber", swappedWithName: target.name, day };
@@ -240,7 +264,11 @@ function nightTroublemaker(rng, villagers, day, actingRelic) {
     const others = villagers.filter((v) => v.alive && !v.jailed && v.id !== troublemaker.id);
     if (others.length < 2) continue;
     const [a, b] = shuffle(rng, others);
+    const aOld = a.relic;
+    const bOld = b.relic;
     [a.relic, b.relic] = [b.relic, a.relic];
+    lockClaimRoleIfNewThreat(a, aOld);
+    lockClaimRoleIfNewThreat(b, bOld);
     troublemaker.belief = { role: "troublemaker", targetName: a.name, targetName2: b.name, day };
     // 문제아 자신의 유물은 그대로다 — 유물이 실제로 바뀐 a, b만 얽힘.
     a.involvedTonight = true;
@@ -251,8 +279,10 @@ function nightTroublemaker(rng, villagers, day, actingRelic) {
 function nightDrunk(rng, villagers, box, day, actingRelic) {
   const drunks = villagers.filter((v) => actingRelic.get(v.id) === "drunk" && v.alive && !v.jailed);
   for (const drunk of drunks) {
+    const drunkOld = drunk.relic;
     box.push(drunk.relic);
     drunk.relic = drawFromBox(rng, box) ?? drunk.relic; // 방금 넣었으니 박스가 비어있을 리 없음
+    lockClaimRoleIfNewThreat(drunk, drunkOld);
     drunk.belief = { role: "drunk", day };
     drunk.involvedTonight = true;
   }
@@ -288,8 +318,10 @@ function deliverBoxSacrifice(rng, villagers, box) {
   if (candidates.length === 0) return;
   box.splice(idx, 1);
   const chosen = pick(rng, candidates);
-  box.push(chosen.relic);
+  const chosenOld = chosen.relic;
+  box.push(chosenOld);
   chosen.relic = "sacrifice";
+  lockClaimRoleIfNewThreat(chosen, chosenOld);
 }
 
 // 제물/하수인도 평범/광기와 마찬가지로 매일 밤 시작할 때 자기 유물을 스스로

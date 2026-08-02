@@ -64,14 +64,15 @@ function weightedPick(rng, weightedOptions) {
   return weightedOptions[weightedOptions.length - 1][0];
 }
 
-// 마을 구성을 무작위로 정한다 — 제물/하수인만 1명씩 고정, 결계는 항상 짝수(0/2/4,
-// 2가 가장 흔함), 나머지 칸은 예지/도둑/문제아/취객/광기/평범 중에서 칸마다 독립적으로
-// 뽑는다. 그래서 어떤 유물이 아예 안 나올 수도, 여러 명 겹칠 수도 있다 — 다만 같은
-// 유물이 이미 여러 번 나왔으면 그다음 칸에서 또 나올 확률을 점점 낮춘다(가중치
-// 1/(이미 나온 횟수+1)) — 안 그러면 가끔 한쪽으로 확 쏠려서(예: 예지 5명) 재미가
-// 없어진다. 완전히 막지는 않으므로 여전히 몰릴 수는 있다.
+// 마을 구성을 무작위로 정한다 — 하수인만 1명 고정(제물은 여기서 배정하지 않는다 —
+// createVillage가 그림자의 유물의 "첫 시작 전달"로 별도 처리, 아래 참고), 결계는
+// 항상 짝수(0/2/4, 2가 가장 흔함), 나머지 칸은 예지/도둑/문제아/취객/광기/평범
+// 중에서 칸마다 독립적으로 뽑는다. 그래서 어떤 유물이 아예 안 나올 수도, 여러 명
+// 겹칠 수도 있다 — 다만 같은 유물이 이미 여러 번 나왔으면 그다음 칸에서 또 나올
+// 확률을 점점 낮춘다(가중치 1/(이미 나온 횟수+1)) — 안 그러면 가끔 한쪽으로 확
+// 쏠려서(예: 예지 5명) 재미가 없어진다. 완전히 막지는 않으므로 여전히 몰릴 수는 있다.
 function generateRelicLayout(rng, size) {
-  const layout = ["sacrifice", "minion"];
+  const layout = ["minion"];
   let remaining = size - layout.length;
 
   const masonCount = Math.min(weightedPick(rng, MASON_COUNT_WEIGHTS), remaining);
@@ -96,24 +97,30 @@ export function createVillage(rng) {
     id: `v${i}`,
     name: names[i],
     relic,
-    startingRelic: relic, // 결말 공개용, 절대 안 바뀜
+    startingRelic: relic, // 결말 공개용, 절대 안 바뀜 — 그림자의 유물이 심기 전
+    // "진짜 원래" 정체를 그대로 남긴다(아래 첫 전달로 relic만 바뀌어도 여긴 안 바뀜).
     alive: true,
     jailed: false,
-    // "내가 기억하는 나" — 처음엔 원래 유물 그대로. 단, 제물/하수인으로 시작하는
-    // 사람은 예외: 그 값 자체가 CLAIM_LINES에 없는 유효하지 않은 belief.role이라(
-    // 위협인 동안은 fakeBelief로 가려지지만, 밤중에 그 유물을 뺏겨 무해해진 뒤
-    // 한 번도 직접 행동한 적이 없으면 이 raw 값이 그대로 새어 나온다) 무난한
-    // "평범한 유물" belief로 시작한다 — 어차피 첫날 밤 위협으로 남아있는 한
-    // fakeBelief가 대신 쓰이니 눈에 보이지 않는다.
-    belief: { role: relic === "sacrifice" || relic === "minion" ? "villager" : relic },
+    // "내가 기억하는 나" — 처음엔 원래 유물 그대로. 단, 하수인으로 시작하는 사람은
+    // 예외: 'minion'은 CLAIM_LINES에 없는 유효하지 않은 belief.role이라(위협인
+    // 동안은 fakeBelief로 가려지지만, 밤중에 그 유물을 뺏겨 무해해진 뒤 한 번도
+    // 직접 행동한 적이 없으면 이 raw 값이 그대로 새어 나온다) 무난한 "평범한 유물"
+    // belief로 시작한다. (제물은 여기서 아예 배정되지 않으므로 이 예외가 필요 없다.)
+    belief: { role: relic === "minion" ? "villager" : relic },
   }));
-  // 그림자의 유물이 첫 시작에 유물함에 제물의 유물을 하나 미리 심어둔다 — 이게
-  // 유일한 여분이라 제물의 유물은 게임 전체에서 최대 2개(처음 시작한 1명 + 이
-  // 여분 1개)까지만 존재할 수 있다. 처형된 제물의 유물도 다른 유물처럼 유물함으로
-  // 돌아가지만, 총량은 이 2개뿐이라 늘어나지 않는다(deliverBoxSacrifice 참고) —
-  // 늘어난 건 예전에 "처형할 때마다 무조건 새로 하나 더 심는" 별도 로직이 있었기
-  // 때문(그 로직은 제거됨).
+  // 그림자의 유물이 "첫 시작에 한 명을 정해서 제물의 유물을 전달"한다 — 유물함에
+  // 제물의 유물을 하나 심어두고 deliverBoxSacrifice를 그대로 재사용해 딱 한 번
+  // 발동시킨다(무작위 생존자 1명에게 심고, 원래 유물은 유물함으로). 그래서 night 1
+  // 시작 시점엔 이 1명만 위협이다 — 다른 유물처럼 이 사람도 원래 자기 유물을 근거로
+  // 사칭한다(lockClaimRoleIfNewThreat, deliverBoxSacrifice 참고).
   const box = [...BOX_SEED, "sacrifice"];
+  deliverBoxSacrifice(rng, villagers, box);
+  // "유물함에 제물의 유물을 하나 추가한다" — 방금 그 1명에게 심느라 다 써버렸으니,
+  // 이후(2번째 밤부터) 매일 밤 재분배될 진짜 여분을 여기서 새로 심어둔다. 이게
+  // 유일한 여분이라 제물의 유물은 게임 전체에서 최대 2개(처음 전달한 1명 + 이
+  // 여분 1개)까지만 존재할 수 있다. 처형된 제물의 유물도 다른 유물처럼 유물함으로
+  // 돌아가지만, 총량은 이 2개뿐이라 늘어나지 않는다(deliverBoxSacrifice 참고).
+  box.push("sacrifice");
   return { villagers, box };
 }
 
@@ -424,7 +431,10 @@ function runNightPhase(state, rng) {
   // 그림자의 유물: 캐스케이드보다 먼저, 유물함에 남은 제물의 유물을 그날 밤
   // 시작 전에 몰래 심는다 — 이 시점의 결과가 곧바로 아래 actingRelic 스냅샷에
   // 반영되어야 그날 밤 "누가 위협인가" 판정과 낮 거짓말에 제대로 걸린다.
-  deliverBoxSacrifice(rng, villagers, box);
+  // night 1(day===1)은 건너뛴다 — "첫 시작에 한 명을 정해서 전달"하는 몫은
+  // createVillage가 게임 시작과 동시에 이미 처리했다(그 뒤에 심어둔 여분이 바로
+  // 이 유물함에 들어있는 것). 여기서 또 발동하면 night 1부터 2명이 되어버린다.
+  if (state.day > 1) deliverBoxSacrifice(rng, villagers, box);
 
   // 그날 밤 시작 시점의 유물 스냅샷 — "누가 그 능력을 쓰는가"뿐 아니라 "누가 오늘
   // 위협인 줄 알고 거짓말하는가"(isThreat/refreshFakeBeliefs)도 이 스냅샷 하나로

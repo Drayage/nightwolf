@@ -20,6 +20,8 @@ import {
   CORRUPTED_MOOD,
   NERVOUS_MOOD,
   MADNESS_EXECUTION_LINE,
+  MINION_CAUGHT_LINE,
+  MINION_CURSE_TRANSFER_LINE,
   RITUAL_FAILURE_TEXT,
   TIMEOUT_FAILURE_LINE,
   nightListenLine,
@@ -561,7 +563,11 @@ export function execute(state, id, rng) {
   const target = state.villagers.find((v) => v.id === id);
   if (!target || state.status !== "playing" || state.phase !== "day") return state;
 
-  const deadVillagers = state.villagers.map((v) => (v.id === id ? { ...v, alive: false } : v));
+  // 전원 새 객체로 복사한다 — 처형 대상만 얕은 복사하면 나머지는 state.villagers와
+  // 같은 객체 참조를 공유하게 되어, resolveExecution이 그림자 계승으로 다른 사람의
+  // relic을 직접 변형(successor.relic = "minion")할 때 그 변경이 이전 state까지
+  // 새어 들어간다(불변성 위반) — 그래서 target이 아닌 사람도 반드시 새 객체여야 한다.
+  const deadVillagers = state.villagers.map((v) => ({ ...v, alive: v.id === id ? false : v.alive }));
   const log = [
     ...state.log,
     { day: state.day, phase: "day", text: `장로가 ${target.name}을(를) 제물로 처형했다.`, meta: { kind: "execution" } },
@@ -582,6 +588,7 @@ export function continueAfterExecution(state) {
 function resolveExecution(state, target, log, villagers, rng) {
   const isRealSacrifice = target.relic === "sacrifice";
   const isMadnessDecoy = target.relic === "madness";
+  const isMinionCaught = target.relic === "minion";
   // 처형된 유물은 다른 유물과 똑같이 유물함으로 돌아간다 — 제물의 유물도 예외가
   // 아니다. 총량은 여전히 createVillage가 심어둔 딱 2개(시작 1명 + 유물함 여분
   // 1개)뿐이라 늘어나지 않는다: deliverBoxSacrifice가 하수인이 자유로운 한 매일
@@ -589,9 +596,15 @@ function resolveExecution(state, target, log, villagers, rng) {
   // 잡기 전까진 다음 밤 곧바로 새 제물이 나타난다(그래서 하수인을 못 잡으면
   // 무관한 처형만으로는 절대 못 끝난다) — 하수인을 가두는 순간 이 재분배가 멈추고,
   // 그때 남아있는 최대 2명만 처형하면 끝난다.
-  let box = [...state.box, target.relic];
+  // 그림자의 유물(minion)은 예외다 — 유물함으로 돌려보내면 안 된다. minion은
+  // "누구나 뽑을 수 있는 풀"이 아니라 정확히 한 명만 쥐는 고유한 정체라, 유물함에
+  // 넣으면 나중에 취객이 그걸 뽑아가면서 아래에서 승계받은 새 하수인과 별개로
+  // "제3의 하수인"이 하나 더 생겨버린다(실제로 이 버그로 동시에 하수인 2명이
+  // 생기는 걸 확인함). 처형된 그림자의 유물은 그냥 소멸한다 — 저주는 아래 승계
+  // 로직으로만 다음 사람에게 옮겨간다.
+  let box = isMinionCaught ? [...state.box] : [...state.box, target.relic];
 
-  if (!isRealSacrifice && !isMadnessDecoy) {
+  if (!isRealSacrifice && !isMadnessDecoy && !isMinionCaught) {
     return {
       ...state,
       villagers,
@@ -608,8 +621,26 @@ function resolveExecution(state, target, log, villagers, rng) {
     log.push({ day: state.day, phase: "day", text: MADNESS_EXECUTION_LINE });
   }
 
+  // 그림자의 유물(하수인)을 진짜로 잡았다 — 예전엔 이것도 "엉뚱한 처형"과 똑같이
+  // 즉시 패배로 처리돼서 무관한 처형과 구분이 안 됐다. 이제는: 그 순간 살아있고
+  // 갇히지 않은 제물의 유물 소지자가 있으면(제물은 최대 2명까지 동시에 있을 수
+  // 있으므로 무작위 1명), 그 사람이 저주를 이어받아 새로운 그림자의 유물이 되고
+  // 그 순간부터 하수인 행세를 시작한다(claimRole은 그대로 유지 — 사칭 정체는 안
+  // 바뀐다). 이어받을 사람이 없으면 그림자는 완전히 끊긴 것 — 아래 승리 조건 검사가
+  // 자연히 승리로 이어진다(remainingSacrifices===0 && minionContained가 둘 다 참).
+  if (isMinionCaught) {
+    log.push({ day: state.day, phase: "day", text: MINION_CAUGHT_LINE });
+    const successors = villagers.filter((v) => v.alive && !v.jailed && v.relic === "sacrifice");
+    if (successors.length > 0) {
+      const successor = pick(rng, successors);
+      successor.relic = "minion";
+      log.push({ day: state.day, phase: "day", text: MINION_CURSE_TRANSFER_LINE });
+    }
+  }
+
   // 승리 조건은 여전히 "하수인이 갇혀있거나 죽었는가"를 본다 — 제물을 새로 심는
   // 것은 이제 처형 시점이 아니라 매일 밤 시작 전 deliverBoxSacrifice가 맡는다.
+  // 그림자를 잡아 저주가 이어졌다면 위에서 이미 새 하수인이 relic에 반영돼 있다.
   const minion = villagers.find((v) => v.relic === "minion" && v.alive);
   const minionContained = !minion || minion.jailed;
 

@@ -546,10 +546,16 @@ export function release(state, id) {
 // 처음 시작 유물 / 그날 밤(마지막으로 처리된 밤) 시작 유물 / 최종 유물 — 3열을
 // 다 보여줘야 로그와 대조해서 "이상한 게 있으면" 바로 찾을 수 있다. 가운데 열이
 // actingRelic 스냅샷 그대로다 — 능력 사용/거짓말 판정이 정확히 이 값 기준이었다.
+// alive도 반드시 같이 넘긴다 — 안 그러면 "죽은 사람의 그 순간 얼어붙은 마지막
+// 유물"과 "지금 살아있는 사람이 실제로 쥔 유물"을 구분 못 해서, 예를 들어 그림자
+// 승계로 죽은 사람이 죽기 직전 잠깐 쥐고 있던 그림자의 유물이 표에 그대로 남아있는
+// 걸 보고 "그림자가 두 명이다(버그 아니야?)"로 오인하기 쉽다 — 실제로는 최대 1명만
+// 살아있는 채로 쥘 수 있고, 죽은 사람의 값은 그 죽는 순간에 멈춘 역사적 기록일 뿐.
 function buildRevealTable(villagers, nightStartRelic) {
   return villagers.map((v) => ({
     id: v.id,
     name: v.name,
+    alive: v.alive,
     startingRelic: v.startingRelic,
     tonightStartRelic: nightStartRelic?.[v.id] ?? v.startingRelic,
     endingRelic: v.relic,

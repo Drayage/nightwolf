@@ -85,6 +85,8 @@
     .reveal-table { border-collapse: collapse; font-size: 12px; white-space: nowrap; }
     .reveal-table th, .reveal-table td { border-bottom: 1px solid #2c2732; padding: 6px 8px; text-align: left; }
     .reveal-table th { color: #8b8b9a; font-weight: 500; }
+    .reveal-table .reveal-row-dead { color: #6f6a7a; }
+    .reveal-table .reveal-row-dead td:nth-child(2) { color: #ff8080; }
 
     .mark-badge { display: inline-block; width: 18px; height: 18px; line-height: 18px; text-align: center; border-radius: 50%; font-size: 11px; font-weight: 700; }
     .mark-badge.mark-o { background: #1f3a24; color: #7ee08a; }
@@ -159,11 +161,11 @@
   </dialog>
 
   <script type="module">
-    import { APP_VERSION } from "./js/app-config.js?v=20260731-29";
-    import { mountVersionBadge, mountErrorOverlay } from "./js/devtools.js?v=20260731-29";
-    import { initAudio, startBgm, stopBgm, setEnabled, isEnabled } from "./js/audio.js?v=20260731-29";
-    import { RITUAL } from "./js/palettes.js?v=20260731-29";
-    import "./js/ui.js?v=20260731-29";
+    import { APP_VERSION } from "./js/app-config.js?v=20260731-30";
+    import { mountVersionBadge, mountErrorOverlay } from "./js/devtools.js?v=20260731-30";
+    import { initAudio, startBgm, stopBgm, setEnabled, isEnabled } from "./js/audio.js?v=20260731-30";
+    import { RITUAL } from "./js/palettes.js?v=20260731-30";
+    import "./js/ui.js?v=20260731-30";
 
     mountErrorOverlay(); // 가장 먼저 — 초기화 에러도 잡히게
     mountVersionBadge();

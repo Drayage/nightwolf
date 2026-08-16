@@ -247,6 +247,7 @@ function renderEnd() {
             {},
             el("tr", {}, [
               el("th", {}, "이름"),
+              el("th", {}, "생사"),
               el("th", {}, "처음 시작 유물"),
               el("th", {}, "오늘 밤 시작 유물"),
               el("th", {}, "마지막 유물"),
@@ -255,9 +256,13 @@ function renderEnd() {
           el(
             "tbody",
             {},
+            // alive를 꼭 같이 보여준다 — 안 그러면 죽은 사람이 죽는 순간 잠깐 쥐고
+            // 있던 유물(예: 그림자 승계 도중 죽은 사람의 얼어붙은 "그림자의 유물")과
+            // 지금 실제로 살아서 쥐고 있는 유물이 구분 안 돼 "동시에 2명"으로 오인하기 쉽다.
             state.revealTable.map((row) =>
-              el("tr", {}, [
+              el("tr", { class: row.alive ? "" : "reveal-row-dead" }, [
                 el("td", {}, row.name),
+                el("td", {}, row.alive ? "생존" : "사망"),
                 el("td", {}, RELIC_INFO[row.startingRelic]?.name ?? row.startingRelic),
                 el("td", {}, RELIC_INFO[row.tonightStartRelic]?.name ?? row.tonightStartRelic),
                 el("td", {}, RELIC_INFO[row.endingRelic]?.name ?? row.endingRelic),
